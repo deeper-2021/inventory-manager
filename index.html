@@ -237,30 +237,17 @@ new Vue({
                 this.html5QrCode.stop().then(ignore => {
                     this.isScanning = false;
                 }).catch(err => {
-                    console.error("Scanner stop error:", err);
+                    // 스캔 중지가 이미 되었거나 카메라가 없을 때 오류가 발생할 수 있으므로, 상태는 확실히 변경해줍니다.
                     this.isScanning = false;
                 });
             }
         },
-        // ★★★ 재고 조회를 POST 방식으로 요청하는 핵심 로직 ★★★
-        async fetchInventory(locationId) {
-            if (!locationId) return;
-            this.loadingInventory = true;
-            this.inventory = [];
-            
-            // 조회 요청도 POST 방식으로 보내기 위한 데이터 구조
-            const payload = {
-                action: 'GET_INVENTORY',
-                locationId: locationId
-            };
-
+        async callApi(payload) {
             try {
                 const response = await fetch(this.gasUrl, {
                     method: 'POST',
-                    // CORS 문제를 피하기 위해 mode를 'cors'로 명시합니다.
                     mode: 'cors',
                     cache: 'no-cache',
-                    // Apps Script는 일반 텍스트로 받는 것을 선호하므로 Content-Type을 변경합니다.
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload),
                     redirect: 'follow'
@@ -269,20 +256,37 @@ new Vue({
                 if (!response.ok) {
                     throw new Error(`서버 응답 오류: ${response.status}`);
                 }
-
+                
                 const result = await response.json();
+
                 if (result.success) {
-                    this.inventory = result.inventory;
+                    return result; // 성공 시 결과 객체 반환
                 } else {
-                    throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
+                    // 스크립트 내부에서 발생한 오류 처리
+                    throw new Error(result.error || '알 수 없는 백엔드 오류가 발생했습니다.');
                 }
             } catch (error) {
-                console.error('Error fetching inventory:', error);
-                this.showNotification('조회 오류', '재고 정보를 불러오는 데 실패했습니다: ' + error.message, 'error');
-                this.inventory = [];
-            } finally {
-                this.loadingInventory = false;
+                // 네트워크 오류 또는 CORS 블락 등의 fetch 자체 실패 처리
+                console.error('API Call Error:', error);
+                // 더 구체적인 에러 메시지를 사용자에게 보여줍니다.
+                this.showNotification('네트워크 오류', '서버와 통신하는 데 실패했습니다. 인터넷 연결 및 스크립트 URL을 확인해주세요. 오류: ' + error.message, 'error');
+                return null; // 실패 시 null 반환
             }
+        },
+        async fetchInventory(locationId) {
+            if (!locationId) return;
+            this.loadingInventory = true;
+            this.inventory = [];
+            
+            const result = await this.callApi({
+                action: 'GET_INVENTORY',
+                locationId: locationId
+            });
+
+            if (result) {
+                this.inventory = result.inventory;
+            }
+            this.loadingInventory = false;
         },
         fetchInventoryByManualInput() {
             if (!this.manualLocationId) {
@@ -298,42 +302,25 @@ new Vue({
                 return;
             }
 
-            const payload = {
-                action: action, // 'IN' 또는 'OUT'
+            const result = await this.callApi({
+                action: action,
                 locationId: this.scannedLocation,
                 productId: this.productId,
                 productName: this.productName,
                 quantity: this.quantity
-            };
+            });
 
-            try {
-                const response = await fetch(this.gasUrl, {
-                    method: 'POST',
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                if (result.success) {
-                    this.showNotification('성공', `재고가 성공적으로 ${action === 'IN' ? '입고' : '출고'} 처리되었습니다.`, 'success');
-                    this.fetchInventory(this.scannedLocation); // 최신 재고 정보로 갱신
-                    // 입력 필드 초기화
-                    this.productId = '';
-                    this.productName = '';
-                    this.quantity = 1;
-                } else {
-                    throw new Error(result.error);
-                }
-            } catch (error) {
-                console.error('Error updating stock:', error);
-                this.showNotification('처리 오류', '재고 업데이트에 실패했습니다: ' + error.message, 'error');
+            if (result) {
+                this.showNotification('성공', `재고가 성공적으로 ${action === 'IN' ? '입고' : '출고'} 처리되었습니다.`, 'success');
+                this.fetchInventory(this.scannedLocation); // 최신 재고 정보로 갱신
+                this.productId = '';
+                this.productName = '';
+                this.quantity = 1;
             }
         },
         generateBarcode() {
             if (this.locationToGenerate) {
                 this.barcodeGenerated = true;
-                // DOM이 업데이트된 후 바코드를 렌더링합니다.
                 this.$nextTick(() => {
                     JsBarcode("#barcode", this.locationToGenerate, {
                         format: "CODE128",
@@ -357,7 +344,6 @@ new Vue({
                     <script>
                         window.onload = function() { 
                             window.print();
-                            // 인쇄 창이 닫힌 후 원래 창으로 포커스를 돌려줍니다.
                             window.onafterprint = function() { window.close(); };
                         }
                     <\/script>
