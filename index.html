@@ -3,410 +3,379 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>바코드 재고 관리 시스템</title>
-    <!-- Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- JsBarcode library for generating barcodes -->
+    <title>간편 재고 관리 시스템</title>
+    <!-- Vue.js and Barcode Scanner Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <!-- Instascan library for barcode scanning -->
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/webrtc-adapter/3.3.3/adapter.min.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.1.10/vue.min.js"></script>
-    <script type="text/javascript" src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        /* Custom styles for better UI */
-        body { font-family: 'Inter', sans-serif; }
+        /* 기본 폰트 및 디자인 일관성 유지 */
+        @import url('https://rsms.me/inter/inter.css');
+        html { font-family: 'Inter', sans-serif; }
+        
+        .tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: #6B7280; /* gray-500 */
+        }
+        .tab-button:hover {
+            background-color: #F3F4F6; /* gray-100 */
+        }
         .tab-button.active {
-            border-bottom: 2px solid #3B82F6;
-            color: #3B82F6;
+            color: #4F46E5; /* indigo-600 */
+            border-bottom-color: #4F46E5;
             font-weight: 600;
         }
-        .tab-button {
-            border-bottom: 2px solid transparent;
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
         }
-        #preview {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.5rem;
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem; /* rounded-xl */
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            transform: scale(0.95);
+            opacity: 0;
+            animation: fadeInScale 0.3s ease-out forwards;
         }
-        .scanner-active {
-            border: 4px solid #3B82F6;
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+
+        @keyframes fadeInScale {
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100">
 
-    <div id="app" class="max-w-xl mx-auto p-4 space-y-6">
-        <header class="text-center">
-            <h1 class="text-3xl font-bold text-gray-900">바코드 재고 관리</h1>
-            <p class="text-gray-600 mt-1">창고 선반 재고를 간편하게 관리하세요.</p>
+<div id="app" class="max-w-4xl mx-auto p-4 md:p-6">
+    <div class="bg-white rounded-xl shadow-lg">
+        <!-- Header -->
+        <header class="p-5 border-b border-gray-200">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 간편 재고 관리 시스템</h1>
         </header>
 
         <!-- Tabs -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="flex border-b border-gray-200">
-                <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button w-1/2 p-4 text-center text-gray-500 transition">
-                    재고 관리
-                </button>
-                <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button w-1/2 p-4 text-center text-gray-500 transition">
-                    바코드 생성기
-                </button>
-                 <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button w-1/2 p-4 text-center text-gray-500 transition">
-                    설정
-                </button>
-            </div>
-
-            <!-- Content panels -->
-            <div class="p-6">
-                <!-- Inventory Management Tab -->
-                <div v-show="activeTab === 'manager'" class="space-y-6">
-                    <!-- ★★★ PC 조회 기능 섹션 ★★★ -->
-                    <div class="space-y-2">
-                        <label for="manualLocationId" class="font-semibold text-gray-700">위치 ID로 조회:</label>
-                        <div class="flex space-x-2">
-                            <input type="text" id="manualLocationId" v-model="manualLocationId" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: A-01-01">
-                            <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition">
-                                조회
-                            </button>
-                        </div>
-                    </div>
-                    <hr>
-                    <!-- Barcode Scanner Section -->
-                    <div class="text-center space-y-4">
-                        <video id="preview" :class="{'scanner-active': isScanning}"></video>
-                        <button @click="toggleScan" class="w-full px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 transition">
-                            {{ isScanning ? '스캔 중지' : '카메라로 위치/제품 스캔' }}
-                        </button>
-                        <p class="text-sm text-gray-500">위치 바코드를 먼저 스캔한 후, 제품 바코드를 스캔하세요.</p>
-                    </div>
-
-                    <!-- Scanned Info & Action Form -->
-                    <div v-if="scannedLocation || currentInventory.length > 0" class="bg-gray-50 p-4 rounded-lg shadow-inner space-y-4">
-                        <div>
-                            <h3 class="font-bold text-lg text-gray-800">선택된 위치: <span class="text-blue-600">{{ scannedLocation }}</span></h3>
-                            
-                            <!-- Current Inventory Display -->
-                            <div class="mt-4">
-                                <h4 class="font-semibold text-gray-700">현재 재고 현황:</h4>
-                                <div v-if="loadingInventory" class="text-center py-4">
-                                    <p class="text-gray-500">재고 정보를 불러오는 중...</p>
-                                </div>
-                                <div v-else-if="currentInventory.length > 0" class="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                                    <div v-for="item in currentInventory" class="flex justify-between items-center bg-white p-2 rounded-md border">
-                                        <div>
-                                            <p class="font-semibold text-sm">{{ item.ProductName }} ({{ item.ProductID }})</p>
-                                        </div>
-                                        <p class="font-bold text-blue-600 text-lg">{{ item.Quantity }}</p>
-                                    </div>
-                                </div>
-                                <div v-else class="text-center py-4 bg-white rounded-md border">
-                                    <p class="text-gray-500">해당 위치에 재고가 없습니다.</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <hr>
-
-                        <!-- Product Info and Action -->
-                        <div class="space-y-4">
-                             <h4 class="font-semibold text-gray-700">제품 정보 입력:</h4>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-600">제품 바코드</label>
-                                <input type="text" v-model="form.productId" placeholder="스캔 또는 직접 입력" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-600">제품명</label>
-                                <input type="text" v-model="form.productName" placeholder="제품 이름 입력" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-600">수량</label>
-                                <input type="number" v-model.number="form.quantity" placeholder="1" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500">
-                            </div>
-
-                            <div class="flex space-x-2">
-                                <button @click="submitStock('IN')" class="w-full py-3 bg-green-500 text-white font-bold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition">입고</button>
-                                <button @click="submitStock('OUT')" class="w-full py-3 bg-red-500 text-white font-bold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition">출고</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Barcode Generator Tab -->
-                <div v-show="activeTab === 'generator'" class="space-y-6">
-                    <h2 class="text-xl font-bold text-center">위치 바코드 생성기</h2>
-                    <div class="grid grid-cols-3 gap-2">
-                         <div>
-                            <label class="block text-sm font-medium text-gray-600">구역</label>
-                            <input type="text" v-model="barcode.zone" maxlength="1" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm uppercase" placeholder="A">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600">선반</label>
-                            <input type="number" v-model="barcode.rack" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="01">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600">층</label>
-                            <input type="number" v-model="barcode.floor" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="01">
-                        </div>
-                    </div>
-                    <div class="text-center bg-gray-100 p-4 rounded-lg">
-                        <p class="text-gray-600">생성될 ID</p>
-                        <p class="text-2xl font-mono font-bold">{{ generatedBarcodeId }}</p>
-                    </div>
-                    <div class="flex justify-center">
-                         <svg id="barcode"></svg>
-                    </div>
-                     <button @click="printBarcode" class="w-full py-3 bg-gray-700 text-white font-bold rounded-lg shadow-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 transition">인쇄</button>
-                </div>
-
-                <!-- Settings Tab -->
-                <div v-show="activeTab === 'settings'" class="space-y-6">
-                    <h2 class="text-xl font-bold text-center">설정</h2>
-                    <div>
-                        <label for="apiUrl" class="block text-sm font-medium text-gray-700">Google Apps Script URL</label>
-                        <input type="url" id="apiUrl" v-model="apiUrl" placeholder="https://script.google.com/macros/s/..." class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <p class="mt-2 text-xs text-gray-500">Google 스프레드시트에서 배포한 웹 앱 URL을 입력하세요.</p>
-                    </div>
-                    <button @click="saveSettings" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">설정 저장</button>
-                </div>
-            </div>
+        <div class="flex justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
+            <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button w-full">재고 관리</button>
+            <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button w-full">바코드 생성</button>
+            <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button w-full">설정</button>
         </div>
 
-        <!-- Toast Notification -->
-        <div v-if="toast.show" class="fixed bottom-5 right-5 px-6 py-3 rounded-lg shadow-lg text-white" :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'">
-            {{ toast.message }}
-        </div>
+        <!-- Main Content -->
+        <main class="p-5 md:p-8">
+            <!-- Inventory Manager Tab -->
+            <div v-show="activeTab === 'manager'">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">재고 관리</h2>
+                
+                <!-- Manual Lookup for PC -->
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <label for="manualLocation" class="block text-sm font-medium text-gray-600 mb-2">위치 ID로 조회:</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="예: A-01-01" class="flex-grow p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">조회</button>
+                    </div>
+                </div>
+
+                <!-- Barcode Scanner -->
+                <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2" style="width: 100%;"></div>
+                <button @click="toggleScan" class="w-full mb-6 px-4 py-2 bg-blue-500 text-white font-semibold rounded-md shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400" v-text="isScanning ? '스캔 중지' : '바코드 스캔 시작'"></button>
+                <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg">
+                    <strong>스캔된 위치:</strong> {{ scannedLocation }}
+                </div>
+
+                <!-- Current Inventory -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">현재 재고 현황</h3>
+                    <div v-if="loadingInventory" class="text-center text-gray-500">재고 정보를 불러오는 중...</div>
+                    <div v-else-if="inventory.length > 0" class="overflow-x-auto bg-white border border-gray-200 rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품명</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="item in inventory" :key="item.ProductID">
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductID }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductName }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-bold text-gray-800">{{ item.Quantity }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else class="text-center p-4 bg-gray-50 rounded-lg text-gray-500">해당 위치에 재고가 없습니다.</div>
+                </div>
+
+                <!-- Stock In/Out Form -->
+                <div v-if="scannedLocation">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입/출고</h3>
+                    <div class="space-y-4">
+                        <input v-model="productId" type="text" placeholder="제품 ID (바코드 또는 수동입력)" class="w-full p-2 border border-gray-300 rounded-md">
+                        <input v-model="productName" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
+                        <input v-model.number="quantity" type="number" placeholder="수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
+                        <div class="flex space-x-4">
+                            <button @click="updateStock('IN')" class="w-full py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고</button>
+                            <button @click="updateStock('OUT')" class="w-full py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">출고</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barcode Generator Tab -->
+            <div v-show="activeTab === 'generator'">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
+                <div class="space-y-4">
+                    <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
+                    <button @click="generateBarcode" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">생성</button>
+                    <div v-if="barcodeGenerated" class="text-center p-4 border rounded-lg">
+                        <svg id="barcode"></svg>
+                        <button @click="printBarcode" class="mt-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">인쇄</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div v-show="activeTab === 'settings'">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">설정</h2>
+                <label for="gasUrl" class="block text-sm font-medium text-gray-600">Google Apps Script URL:</label>
+                <input id="gasUrl" v-model="gasUrl" type="text" placeholder="배포된 웹 앱 URL을 붙여넣으세요" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                <button @click="saveSettings" class="mt-4 w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">저장</button>
+            </div>
+        </main>
     </div>
 
-    <script>
-        new Vue({
-            el: '#app',
-            data: {
-                activeTab: 'manager',
-                apiUrl: '',
-                // Scanner data
-                scanner: null,
-                activeCameraId: null,
-                cameras: [],
-                isScanning: false,
-                scannedLocation: '',
-                // Form data
-                form: {
-                    productId: '',
-                    productName: '',
-                    quantity: 1
-                },
-                // Barcode generator data
-                barcode: {
-                    zone: 'A',
-                    rack: 1,
-                    floor: 1
-                },
-                // Inventory data
-                currentInventory: [],
-                loadingInventory: false,
-                // PC manual lookup
-                manualLocationId: '',
-                // Toast notification
-                toast: {
-                    show: false,
-                    message: '',
-                    type: 'success'
-                }
-            },
-            computed: {
-                generatedBarcodeId() {
-                    const rack = this.barcode.rack.toString().padStart(2, '0');
-                    const floor = this.barcode.floor.toString().padStart(2, '0');
-                    return `${this.barcode.zone.toUpperCase()}-${rack}-${floor}`;
-                }
-            },
-            watch: {
-                generatedBarcodeId(newVal) {
-                    if (newVal) {
-                        this.$nextTick(() => {
-                            JsBarcode("#barcode", newVal, {
-                                format: "CODE128",
-                                displayValue: true,
-                                fontSize: 18,
-                                textMargin: 0
-                            });
-                        });
-                    }
-                }
-            },
-            mounted() {
-                // Load saved API URL from localStorage
-                this.apiUrl = localStorage.getItem('inventoryApiUrl') || '';
-                // Initialize barcode scanner
-                this.scanner = new Instascan.Scanner({ video: document.getElementById('preview'), scanPeriod: 5 });
-                this.scanner.addListener('scan', (content) => {
-                    this.handleScan(content);
-                });
-                Instascan.Camera.getCameras().then(cameras => {
-                    this.cameras = cameras;
-                    if (cameras.length > 0) {
-                        this.activeCameraId = cameras[0].id;
-                        if(this.isScanning) this.startScan(); // Start scan if it was active
-                    } else {
-                        console.error('No cameras found.');
-                        this.showToast('카메라를 찾을 수 없습니다.', 'error');
-                    }
-                }).catch(e => console.error(e));
-                 // Initial barcode generation
-                this.$nextTick(() => {
-                    JsBarcode("#barcode", this.generatedBarcodeId);
-                });
-            },
-            methods: {
-                showToast(message, type = 'success') {
-                    this.toast.message = message;
-                    this.toast.type = type;
-                    this.toast.show = true;
-                    setTimeout(() => {
-                        this.toast.show = false;
-                    }, 3000);
-                },
-                saveSettings() {
-                    localStorage.setItem('inventoryApiUrl', this.apiUrl);
-                    this.showToast('설정이 저장되었습니다.');
-                },
-                toggleScan() {
-                    this.isScanning = !this.isScanning;
-                    if (this.isScanning) {
-                        this.startScan();
-                    } else {
-                        this.stopScan();
-                    }
-                },
-                startScan() {
-                    if (this.cameras.length === 0) {
-                        this.showToast('사용 가능한 카메라가 없습니다.', 'error');
-                        this.isScanning = false;
-                        return;
-                    }
-                    this.scanner.start(this.cameras[0]);
-                },
-                stopScan() {
-                    this.scanner.stop();
-                },
-                handleScan(content) {
-                    // Check if the scanned content matches the location ID format (e.g., A-01-01)
-                    if (/^[A-Z]-\d{2}-\d{2}$/.test(content)) {
-                        this.scannedLocation = content;
-                        this.showToast(`위치 '${content}'가 선택되었습니다.`);
-                        this.fetchInventory(content);
-                    } else {
-                        this.form.productId = content;
-                        this.showToast(`제품 '${content}'가 스캔되었습니다.`);
-                    }
-                },
-                fetchInventory(locationId) {
-                    if (!this.apiUrl) {
-                        this.showToast('API URL이 설정되지 않았습니다.', 'error');
-                        return;
-                    }
-                    if (!locationId) return;
+    <!-- Modal for notifications -->
+    <div v-if="showModal" class="modal-overlay" @click="showModal = false">
+        <div class="modal-content text-center" @click.stop>
+            <h3 class="text-xl font-semibold mb-4" :class="modalType === 'success' ? 'text-green-600' : 'text-red-600'">{{ modalTitle }}</h3>
+            <p class="text-gray-600 mb-6">{{ modalMessage }}</p>
+            <button @click="showModal = false" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">닫기</button>
+        </div>
+    </div>
+</div>
 
-                    this.loadingInventory = true;
-                    this.currentInventory = [];
-                    
-                    fetch(`${this.apiUrl}?location=${locationId}`, { method: 'GET' })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
-                            this.currentInventory = data.inventory || [];
-                        })
-                        .catch(error => {
-                            console.error('Error fetching inventory:', error);
-                            this.showToast('재고 정보를 불러오는데 실패했습니다.', 'error');
-                        })
-                        .finally(() => {
-                             this.loadingInventory = false;
-                        });
-                },
-                fetchInventoryByManualInput() {
-                    const locationId = this.manualLocationId.trim().toUpperCase();
-                    if (!locationId) {
-                        this.showToast('조회할 위치 ID를 입력하세요.', 'error');
-                        return;
-                    }
-                    this.scannedLocation = locationId;
-                    this.fetchInventory(locationId);
-                },
-                submitStock(action) {
-                    if (!this.apiUrl) {
-                        this.showToast('API URL이 설정되지 않았습니다.', 'error');
-                        return;
-                    }
-                    if (!this.scannedLocation || !this.form.productId || !this.form.productName || this.form.quantity <= 0) {
-                        this.showToast('위치, 제품 정보, 수량을 모두 입력하세요.', 'error');
-                        return;
-                    }
-
-                    const payload = {
-                        locationId: this.scannedLocation,
-                        productId: this.form.productId,
-                        productName: this.form.productName,
-                        quantity: this.form.quantity,
-                        action: action // 'IN' or 'OUT'
-                    };
-
-                    fetch(this.apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'text/plain;charset=utf-8', // Apps Script web apps often expect text/plain for doPost
-                        },
-                        body: JSON.stringify(payload)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            this.showToast(`'${this.form.productName}' ${action === 'IN' ? '입고' : '출고'} 처리 완료!`);
-                            // Refresh inventory for the current location
-                            this.fetchInventory(this.scannedLocation);
-                            // Reset form fields
-                            this.form.productId = '';
-                            this.form.productName = '';
-                            this.form.quantity = 1;
-                        } else {
-                             throw new Error(data.error || 'Unknown error');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error submitting stock:', error);
-                        this.showToast('데이터 처리 중 오류가 발생했습니다.', 'error');
-                    });
-                },
-                printBarcode() {
-                    const barcodeSVG = document.getElementById('barcode').outerHTML;
-                    const printWindow = window.open('', '_blank');
-                    printWindow.document.write(`
-                        <html>
-                            <head><title>Print Barcode</title></head>
-                            <body style="text-align:center; margin-top: 50px;">
-                                ${barcodeSVG}
-                                <script>
-                                    window.onload = function() {
-                                        window.print();
-                                        window.close();
-                                    }
-                                <\/script>
-                            </body>
-                        </html>
-                    `);
-                    printWindow.document.close();
-                }
+<script>
+new Vue({
+    el: '#app',
+    data: {
+        activeTab: 'manager',
+        gasUrl: '',
+        scannedLocation: '',
+        manualLocationId: '',
+        productId: '',
+        productName: '',
+        quantity: 1,
+        inventory: [],
+        loadingInventory: false,
+        isScanning: false,
+        html5QrCode: null,
+        locationToGenerate: '',
+        barcodeGenerated: false,
+        showModal: false,
+        modalTitle: '',
+        modalMessage: '',
+        modalType: 'info'
+    },
+    mounted() {
+        this.gasUrl = localStorage.getItem('gasUrl') || '';
+        this.html5QrCode = new Html5Qrcode("reader");
+    },
+    methods: {
+        saveSettings() {
+            localStorage.setItem('gasUrl', this.gasUrl);
+            this.showNotification('성공', '설정이 저장되었습니다.', 'success');
+        },
+        toggleScan() {
+            if (this.isScanning) {
+                this.stopScan();
+            } else {
+                this.startScan();
             }
-        });
-    </script>
+        },
+        startScan() {
+            if (!this.gasUrl) {
+                this.showNotification('오류', '먼저 설정 탭에서 Google Apps Script URL을 입력해주세요.', 'error');
+                return;
+            }
+            this.isScanning = true;
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                this.scannedLocation = decodedText;
+                this.manualLocationId = decodedText;
+                this.fetchInventory(decodedText);
+                this.stopScan();
+            };
+            this.html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+                .catch(err => {
+                    console.error("Scanner start error:", err);
+                    this.isScanning = false;
+                    this.showNotification('카메라 오류', '카메라를 시작할 수 없습니다. 권한을 확인해주세요.', 'error');
+                });
+        },
+        stopScan() {
+            if (this.isScanning && this.html5QrCode.isScanning) {
+                this.html5QrCode.stop().then(ignore => {
+                    this.isScanning = false;
+                }).catch(err => {
+                    console.error("Scanner stop error:", err);
+                    this.isScanning = false;
+                });
+            }
+        },
+        // ★★★ 재고 조회를 POST 방식으로 요청하는 핵심 로직 ★★★
+        async fetchInventory(locationId) {
+            if (!locationId) return;
+            this.loadingInventory = true;
+            this.inventory = [];
+            
+            // 조회 요청도 POST 방식으로 보내기 위한 데이터 구조
+            const payload = {
+                action: 'GET_INVENTORY',
+                locationId: locationId
+            };
+
+            try {
+                const response = await fetch(this.gasUrl, {
+                    method: 'POST',
+                    // CORS 문제를 피하기 위해 mode를 'cors'로 명시합니다.
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    // Apps Script는 일반 텍스트로 받는 것을 선호하므로 Content-Type을 변경합니다.
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload),
+                    redirect: 'follow'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`서버 응답 오류: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    this.inventory = result.inventory;
+                } else {
+                    throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error('Error fetching inventory:', error);
+                this.showNotification('조회 오류', '재고 정보를 불러오는 데 실패했습니다: ' + error.message, 'error');
+                this.inventory = [];
+            } finally {
+                this.loadingInventory = false;
+            }
+        },
+        fetchInventoryByManualInput() {
+            if (!this.manualLocationId) {
+                this.showNotification('알림', '조회할 위치 ID를 입력해주세요.', 'info');
+                return;
+            }
+            this.scannedLocation = this.manualLocationId;
+            this.fetchInventory(this.manualLocationId);
+        },
+        async updateStock(action) {
+            if (!this.scannedLocation || !this.productId || !this.productName || this.quantity <= 0) {
+                this.showNotification('입력 오류', '모든 필드를 올바르게 입력해주세요.', 'error');
+                return;
+            }
+
+            const payload = {
+                action: action, // 'IN' 또는 'OUT'
+                locationId: this.scannedLocation,
+                productId: this.productId,
+                productName: this.productName,
+                quantity: this.quantity
+            };
+
+            try {
+                const response = await fetch(this.gasUrl, {
+                    method: 'POST',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.showNotification('성공', `재고가 성공적으로 ${action === 'IN' ? '입고' : '출고'} 처리되었습니다.`, 'success');
+                    this.fetchInventory(this.scannedLocation); // 최신 재고 정보로 갱신
+                    // 입력 필드 초기화
+                    this.productId = '';
+                    this.productName = '';
+                    this.quantity = 1;
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Error updating stock:', error);
+                this.showNotification('처리 오류', '재고 업데이트에 실패했습니다: ' + error.message, 'error');
+            }
+        },
+        generateBarcode() {
+            if (this.locationToGenerate) {
+                this.barcodeGenerated = true;
+                // DOM이 업데이트된 후 바코드를 렌더링합니다.
+                this.$nextTick(() => {
+                    JsBarcode("#barcode", this.locationToGenerate, {
+                        format: "CODE128",
+                        displayValue: true,
+                        fontSize: 18,
+                        textMargin: 0
+                    });
+                });
+            } else {
+                this.showNotification('알림', '바코드로 생성할 위치 ID를 입력해주세요.', 'info');
+            }
+        },
+        printBarcode() {
+            const barcodeSVG = document.getElementById('barcode').outerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head><title>Barcode Print</title></head>
+                <body style="text-align:center; margin-top: 50px;">
+                    ${barcodeSVG}
+                    <script>
+                        window.onload = function() { 
+                            window.print();
+                            // 인쇄 창이 닫힌 후 원래 창으로 포커스를 돌려줍니다.
+                            window.onafterprint = function() { window.close(); };
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        },
+        showNotification(title, message, type = 'info') {
+            this.modalTitle = title;
+            this.modalMessage = message;
+            this.modalType = type;
+            this.showModal = true;
+        }
+    }
+});
+</script>
+
 </body>
 </html>
 
