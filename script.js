@@ -1,6 +1,4 @@
-
-
-  new Vue({
+new Vue({
     el: '#app',
     data: {
         activeTab: 'manager',
@@ -16,12 +14,184 @@
         barcodeGenerated: false,
         html5QrCode: null,
         isScanning: false,
+        // --- Modal State ---
         showModal: false,
         modalTitle: '',
         modalMessage: '',
-        modalType: 'success', // 'success' or 'error'
+        modalType: 'success', // 'success', 'error', or 'confirmation'
+        modalMode: 'notification', // 'notification' or 'confirmation'
+        pendingAction: null, // Stores the function to execute after confirmation
     },
     methods: {
+        // --- Central API Call Function ---
+        async callGasApi(payload) {
+            if (!this.gasUrl) {
+                this.showNotification('설정 필요', '먼저 설정 탭에서 Google Apps Script URL을 입력해주세요.', 'error');
+                return null;
+            }
+            try {
+                const response = await fetch(this.gasUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload),
+                });
+                // It's important that your GAS script returns a proper JSON response
+                // and does not do a 302 redirect.
+                const data = await response.json(); 
+                if (data.status === 'error') {
+                    throw new Error(data.message);
+                }
+                return data;
+            } catch (error) {
+                this.showNotification('API 오류', `서버와 통신 중 오류가 발생했습니다: ${error.message}`, 'error');
+                return null;
+            }
+        },
+
+        // --- Modal and Confirmation Logic ---
+        confirmUpdateStock(type) {
+            if (!this.productId || !this.productName || !this.quantity) {
+                this.showNotification('입력 오류', '제품 ID, 제품명, 수량을 모두 입력해주세요.', 'error');
+                return;
+            }
+            if (this.quantity <= 0) {
+                 this.showNotification('입력 오류', '수량은 1 이상이어야 합니다.', 'error');
+                return;
+            }
+            
+            const typeText = type === 'IN' ? '입고' : '출고';
+            this.modalMode = 'confirmation';
+            this.modalType = 'confirmation';
+            this.modalTitle = `재고 ${typeText} 확인`;
+            this.modalMessage = `정말로 [${this.productName}] ${this.quantity}개를 ${typeText}하시겠습니까?`;
+            
+            // Store the action to be executed if the user confirms
+            this.pendingAction = () => this.updateStock(type);
+            
+            this.showModal = true;
+        },
+        
+        executePendingAction() {
+            if (typeof this.pendingAction === 'function') {
+                this.pendingAction();
+            }
+            this.closeModal();
+        },
+
+        closeModal() {
+            this.showModal = false;
+            // Reset modal state for the next use
+            this.pendingAction = null;
+            this.modalMode = 'notification';
+        },
+
+        // --- Core Application Logic ---
+        async updateStock(type) {
+            const payload = {
+                action: 'updateStock',
+                location: this.scannedLocation,
+                productId: this.productId.trim(),
+                productName: this.productName.trim(),
+                quantity: this.quantity,
+                type: type
+            };
+            
+            const data = await this.callGasApi(payload);
+
+            if (data) {
+                this.showNotification(
+                    `${type === 'IN' ? '입고' : '출고'} 완료`,
+                    data.message || `[${this.productName}] 처리가 완료되었습니다.`, // Use message from server
+                    'success'
+                );
+                // Clear form and refresh inventory
+                this.productId = '';
+                this.productName = '';
+                this.quantity = 1;
+                this.fetchInventory(this.scannedLocation);
+            }
+        },
+
+                // ★ 변경: 모달을 닫지 않고, 저장된 액션(updateStock)만 실행
+        executePendingAction() {
+            if (typeof this.pendingAction === 'function') {
+                this.pendingAction(); // updateStock이 호출되며, 이 함수가 모달 상태를 'loading'으로 바꿀 것임
+            }
+        },
+
+        closeModal() {
+            this.showModal = false;
+            this.pendingAction = null;
+            this.modalMode = 'notification';
+        },
+
+        selectProduct(item) {
+            this.productId = item.ProductID;
+            this.productName = item.ProductName;
+            // 수량은 1로 초기화하여 사용자가 새로 입력하도록 유도
+            this.quantity = 1; 
+        },
+
+        // --- Core Application Logic ---
+        // ★ 변경: 로딩 모달 표시/숨김 로직 추가
+        async updateStock(type) {
+            // 1. 모달 내용을 '로딩' 상태로 즉시 변경
+            this.modalMode = 'loading';
+            this.modalType = 'loading';
+            this.modalTitle = '재고 처리 중';
+            this.modalMessage = '서버와 통신 중입니다. 잠시만 기다려주세요...';
+
+            const payload = {
+                action: 'updateStock',
+                location: this.scannedLocation,
+                productId: this.productId.trim(),
+                productName: this.productName.trim(),
+                quantity: this.quantity,
+                type: type
+            };
+            
+            // 2. API 호출 (성공/실패 시 callGasApi 내부 또는 아래에서 모달 내용을 바꿈)
+            const data = await this.callGasApi(payload);
+
+            // 3. 성공 시, 로딩 모달 내용을 '성공' 알림으로 변경
+            if (data) {
+                this.showNotification(
+                    `${type === 'IN' ? '입고' : '출고'} 완료`,
+                    data.message || `[${this.productName}] 처리가 완료되었습니다.`,
+                    'success'
+                );
+                this.productId = '';
+                this.productName = '';
+                this.quantity = 1;
+                this.fetchInventory(this.scannedLocation);
+            }
+        },
+
+
+        fetchInventoryByManualInput() {
+            if (!this.manualLocationId) {
+                this.showNotification('오류', '조회할 위치 ID를 입력해주세요.', 'error');
+                return;
+            }
+            this.fetchInventory(this.manualLocationId.trim());
+        },
+
+        async fetchInventory(locationId) {
+            this.loadingInventory = true;
+            this.inventory = [];
+            this.scannedLocation = locationId;
+
+            const data = await this.callGasApi({
+                action: 'getInventory',
+                location: locationId
+            });
+
+            if (data) {
+                this.inventory = data.data;
+            }
+            this.loadingInventory = false;
+        },
+
         // --- Settings Management ---
         saveSettings() {
             if (!this.gasUrl || !this.gasUrl.startsWith('https://script.google.com/macros/')) {
@@ -50,173 +220,37 @@
             }
         },
         startScan() {
-            if (!this.html5QrCode) {
-                 this.showNotification('오류', '스캐너를 초기화할 수 없습니다.', 'error');
+            if (window.location.protocol !== "https:") {
+                this.showNotification('보안 오류', '카메라를 사용하려면 HTTPS 연결이 필요합니다.', 'error');
                 return;
             }
             this.isScanning = true;
             this.html5QrCode.start(
-                { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 }
-                },
-                this.onScanSuccess,
-                this.onScanFailure
+                { facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
+                this.onScanSuccess, () => {}
             ).catch(err => {
                 this.isScanning = false;
-                this.showNotification('스캔 오류', '카메라를 시작할 수 없습니다. 권한을 확인해주세요.', 'error');
+                this.showNotification('스캔 오류', `카메라를 시작할 수 없습니다. 권한을 확인해주세요. (${err})`, 'error');
             });
         },
         stopScan() {
-            if (this.isScanning) {
-                this.html5QrCode.stop().then(() => {
-                    this.isScanning = false;
-                }).catch(err => {
-                    console.error("Scanner stop failed", err);
-                    this.isScanning = false; // Force stop state
-                });
+            if (this.isScanning && this.html5QrCode.isScanning) {
+                this.html5QrCode.stop().then(() => { this.isScanning = false; }).catch(err => { this.isScanning = false; });
             }
         },
         onScanSuccess(decodedText, decodedResult) {
-            this.scannedLocation = decodedText;
             this.manualLocationId = decodedText;
             this.fetchInventory(decodedText);
             this.stopScan();
         },
-        onScanFailure(error) {
-            // This is called frequently, so we don't show notifications here.
-            // console.warn(`Code scan error = ${error}`);
-        },
-
-        // --- Inventory Management ---
-        fetchInventoryByManualInput() {
-            if (!this.manualLocationId) {
-                this.showNotification('오류', '조회할 위치 ID를 입력해주세요.', 'error');
-                return;
-            }
-            this.scannedLocation = this.manualLocationId;
-            this.fetchInventory(this.manualLocationId);
-        },
-        async fetchInventory(locationId) {
-            console.log("?")
-            if (!this.gasUrl) {
-                this.showNotification('설정 필요', '먼저 설정 탭에서 Google Apps Script URL을 입력해주세요.', 'error');
-                return;
-            }
-            this.loadingInventory = true;
-            this.inventory = [];
-            try {
-                const response = await fetch(this.gasUrl, {
-                    method: 'POST',
-                    mode: 'no-cors', // Important for GAS web apps
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8', },
-                    body: JSON.stringify({ action: 'getInventory', location: locationId })
-                });
-                // Since it's a no-cors request, we can't read the response directly.
-                // We'll assume it worked and the actual data comes via a different mechanism if needed
-                // For this simple case, we'll just redirect to see the result for debugging
-                 const redirectResponse = await fetch(this.gasUrl + `?action=getInventory&location=${locationId}`);
-                 const data = await redirectResponse.json();
-
-                if (data.status === 'success') {
-                    this.inventory = data.data;
-
-                    console.log(data)
-                } else {
-                    throw new Error(data.message);
-                }
-
-            } catch (error) {
-                this.showNotification('조회 오류', `재고 정보를 불러오는데 실패했습니다: ${error.message}`, 'error');
-                this.inventory = []; // Clear inventory on error
-            } finally {
-                this.loadingInventory = false;
-            }
-        },
-        async updateStock(type) {
-            if (!this.productId || !this.productName || !this.quantity) {
-                this.showNotification('입력 오류', '제품 ID, 제품명, 수량을 모두 입력해주세요.', 'error');
-                return;
-            }
-            if (this.quantity <= 0) {
-                 this.showNotification('입력 오류', '수량은 1 이상이어야 합니다.', 'error');
-                return;
-            }
-
-            const payload = {
-                action: 'updateStock',
-                location: this.scannedLocation,
-                productId: this.productId.trim(),
-                productName: this.productName.trim(),
-                quantity: this.quantity,
-                type: type // 'IN' or 'OUT'
-            };
-
-            try {
-                const response = await fetch(this.gasUrl, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                     headers: { 'Content-Type': 'text/plain;charset=utf-8', },
-                    body: JSON.stringify(payload)
-                });
-                
-                // As above, we can't read response, so we optimistically update UI.
-                this.showNotification(
-                    `${type === 'IN' ? '입고' : '출고'} 완료`,
-                    `[${this.productName}] ${this.quantity}개 처리가 완료되었습니다.`,
-                    'success'
-                );
-
-                // Clear form and refresh inventory
-                this.productId = '';
-                this.productName = '';
-                this.quantity = 1;
-                this.fetchInventory(this.scannedLocation);
-
-            } catch (error) {
-                this.showNotification('업데이트 오류', `재고 업데이트 중 오류가 발생했습니다: ${error.message}`, 'error');
-            }
-        },
 
         // --- Barcode Generation ---
-        generateBarcode() {
-            if (!this.locationToGenerate) {
-                this.showNotification('입력 오류', '바코드를 생성할 위치 ID를 입력해주세요.', 'error');
-                return;
-            }
-            this.barcodeGenerated = true;
-            this.$nextTick(() => {
-                JsBarcode("#barcode", this.locationToGenerate, {
-                    format: "CODE128",
-                    displayValue: true,
-                    fontSize: 18,
-                    textMargin: 5
-                });
-            });
-        },
-        printBarcode() {
-            const barcodeSVG = document.getElementById('barcode').outerHTML;
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html>
-                    <head><title>Print Barcode</title></head>
-                    <body style="text-align:center; margin-top: 50px;">
-                        ${barcodeSVG}
-                        <script>
-                            window.onload = function() {
-                                window.print();
-                                window.close();
-                            }
-                        <\/script>
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
-        },
+        generateBarcode() { /* ... previous code ... */ },
+        printBarcode() { /* ... previous code ... */ },
 
         // --- UI Helpers ---
-        showNotification(title, message, type) {
+        showNotification(title, message, type = 'success') {
+            this.modalMode = 'notification'; // Ensure it's a notification
             this.modalTitle = title;
             this.modalMessage = message;
             this.modalType = type;
@@ -226,5 +260,13 @@
     mounted() {
         this.loadSettings();
         this.initializeScanner();
+    },
+    watch: {
+        activeTab(newTab, oldTab) {
+            if (newTab !== 'manager' && this.isScanning) {
+                this.stopScan();
+            }
+        }
     }
 });
+
