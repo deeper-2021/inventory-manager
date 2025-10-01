@@ -165,203 +165,32 @@
     </div>
 
     <!-- Modal for notifications -->
-    <div v-if="showModal" class="modal-overlay" @click="showModal = false">
+    <!-- <div v-if="showModal" class="modal-overlay" @click="showModal = false">
         <div class="modal-content text-center" @click.stop>
             <h3 class="text-xl font-semibold mb-4" :class="modalType === 'success' ? 'text-green-600' : 'text-red-600'">{{ modalTitle }}</h3>
             <p class="text-gray-600 mb-6">{{ modalMessage }}</p>
             <button @click="showModal = false" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">닫기</button>
         </div>
-    </div>
+    </div> -->
 </div>
-
+<script src="/script.js"></script>
 <script>
-new Vue({
-    el: '#app',
-    data: {
-        activeTab: 'manager',
-        gasUrl: '',
-        scannedLocation: '',
-        manualLocationId: '',
-        productId: '',
-        productName: '',
-        quantity: 1,
-        inventory: [],
-        loadingInventory: false,
-        isScanning: false,
-        html5QrCode: null,
-        locationToGenerate: '',
-        barcodeGenerated: false,
-        showModal: false,
-        modalTitle: '',
-        modalMessage: '',
-        modalType: 'info'
-    },
-    mounted() {
-        this.gasUrl = localStorage.getItem('gasUrl') || '';
-        this.html5QrCode = new Html5Qrcode("reader");
-    },
-    methods: {
-        saveSettings() {
-            localStorage.setItem('gasUrl', this.gasUrl);
-            this.showNotification('성공', '설정이 저장되었습니다.', 'success');
-        },
-        toggleScan() {
-            if (this.isScanning) {
-                this.stopScan();
-            } else {
-                this.startScan();
-            }
-        },
-        startScan() {
-            if (!this.gasUrl) {
-                this.showNotification('오류', '먼저 설정 탭에서 Google Apps Script URL을 입력해주세요.', 'error');
-                return;
-            }
-            this.isScanning = true;
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-            const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-                this.scannedLocation = decodedText;
-                this.manualLocationId = decodedText;
-                this.fetchInventory(decodedText);
-                this.stopScan();
-            };
-            this.html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
-                .catch(err => {
-                    console.error("Scanner start error:", err);
-                    this.isScanning = false;
-                    this.showNotification('카메라 오류', '카메라를 시작할 수 없습니다. 권한을 확인해주세요.', 'error');
-                });
-        },
-        stopScan() {
-            if (this.isScanning && this.html5QrCode.isScanning) {
-                this.html5QrCode.stop().then(ignore => {
-                    this.isScanning = false;
-                }).catch(err => {
-                    // 스캔 중지가 이미 되었거나 카메라가 없을 때 오류가 발생할 수 있으므로, 상태는 확실히 변경해줍니다.
-                    this.isScanning = false;
-                });
-            }
-        },
-        async callApi(payload) {
-            try {
-                const response = await fetch(this.gasUrl, {
-                    method: 'POST',
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload),
-                    redirect: 'follow'
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`서버 응답 오류: ${response.status}`);
-                }
-                
-                const result = await response.json();
+    // 1단계에서 복사한 Apps Script 웹 앱 URL을 여기에 붙여넣으세요.
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyaQHKkrAbYcykgq4wMVNPp0ZqhqXwB5aUN5BgUYLg30Yd-rYv4MrzAqKv2xwELGbw9UQ/exec';
 
-                if (result.success) {
-                    return result; // 성공 시 결과 객체 반환
-                } else {
-                    // 스크립트 내부에서 발생한 오류 처리
-                    throw new Error(result.error || '알 수 없는 백엔드 오류가 발생했습니다.');
-                }
-            } catch (error) {
-                // 네트워크 오류 또는 CORS 블락 등의 fetch 자체 실패 처리
-                console.error('API Call Error:', error);
-                // 더 구체적인 에러 메시지를 사용자에게 보여줍니다.
-                this.showNotification('네트워크 오류', '서버와 통신하는 데 실패했습니다. 인터넷 연결 및 스크립트 URL을 확인해주세요. 오류: ' + error.message, 'error');
-                return null; // 실패 시 null 반환
-            }
-        },
-        async fetchInventory(locationId) {
-            if (!locationId) return;
-            this.loadingInventory = true;
-            this.inventory = [];
-            
-            const result = await this.callApi({
-                action: 'GET_INVENTORY',
-                locationId: locationId
-            });
+    // fetch를 사용하여 웹 앱에 GET 요청을 보냅니다.
+    fetch(WEB_APP_URL)
+    .then(response => response.json()) // 응답을 JSON 형태로 파싱합니다.
+    .then(data => {
+        // 성공적으로 데이터를 받아왔을 때 실행됩니다.
+        console.log(data); // { a1: 'A1셀의 값', b1: 'B1셀의 값' }
 
-            if (result) {
-                this.inventory = result.inventory;
-            }
-            this.loadingInventory = false;
-        },
-        fetchInventoryByManualInput() {
-            if (!this.manualLocationId) {
-                this.showNotification('알림', '조회할 위치 ID를 입력해주세요.', 'info');
-                return;
-            }
-            this.scannedLocation = this.manualLocationId;
-            this.fetchInventory(this.manualLocationId);
-        },
-        async updateStock(action) {
-            if (!this.scannedLocation || !this.productId || !this.productName || this.quantity <= 0) {
-                this.showNotification('입력 오류', '모든 필드를 올바르게 입력해주세요.', 'error');
-                return;
-            }
+    })
+    .catch(error => {
+        // 에러가 발생했을 때 실행됩니다.
+        console.error('데이터를 가져오는 데 실패했습니다:', error);
+    });
 
-            const result = await this.callApi({
-                action: action,
-                locationId: this.scannedLocation,
-                productId: this.productId,
-                productName: this.productName,
-                quantity: this.quantity
-            });
-
-            if (result) {
-                this.showNotification('성공', `재고가 성공적으로 ${action === 'IN' ? '입고' : '출고'} 처리되었습니다.`, 'success');
-                this.fetchInventory(this.scannedLocation); // 최신 재고 정보로 갱신
-                this.productId = '';
-                this.productName = '';
-                this.quantity = 1;
-            }
-        },
-        generateBarcode() {
-            if (this.locationToGenerate) {
-                this.barcodeGenerated = true;
-                this.$nextTick(() => {
-                    JsBarcode("#barcode", this.locationToGenerate, {
-                        format: "CODE128",
-                        displayValue: true,
-                        fontSize: 18,
-                        textMargin: 0
-                    });
-                });
-            } else {
-                this.showNotification('알림', '바코드로 생성할 위치 ID를 입력해주세요.', 'info');
-            }
-        },
-        printBarcode() {
-            const barcodeSVG = document.getElementById('barcode').outerHTML;
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html>
-                <head><title>Barcode Print</title></head>
-                <body style="text-align:center; margin-top: 50px;">
-                    ${barcodeSVG}
-                    <script>
-                        window.onload = function() { 
-                            window.print();
-                            window.onafterprint = function() { window.close(); };
-                        }
-                    <\/script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-        },
-        showNotification(title, message, type = 'info') {
-            this.modalTitle = title;
-            this.modalMessage = message;
-            this.modalType = type;
-            this.showModal = true;
-        }
-    }
-});
 </script>
-
 </body>
 </html>
-
