@@ -13,7 +13,7 @@
     <style>
         @import url('https://rsms.me/inter/inter.css');
         html { font-family: 'Inter', sans-serif; }
-        #reader { min-height: 250px; }
+        #reader, #product-reader { min-height: 250px; background-color: #f9fafb; }
         .tab-button { padding: 10px 20px; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease; font-weight: 500; color: #6B7280; }
         .tab-button:hover { background-color: #F3F4F6; }
         .tab-button.active { color: #4F46E5; border-bottom-color: #4F46E5; font-weight: 600; }
@@ -31,12 +31,12 @@
             <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 간편 재고 관리 시스템</h1>
         </header>
 
-        <!-- Tabs -->
-        <div class="justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
-            <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button w-full">재고 관리</button>
-            <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button w-full">바코드 생성</button>
-            <button @click="activeTab = 'totalStock'" :class="{'active': activeTab === 'totalStock'}" class="tab-button w-full">총 재고 조회</button>
-            <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button w-full">설정</button>
+        <!-- ★ 변경: Tabs 레이아웃 수정 (flex 추가) -->
+        <div class="flex flex-wrap justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
+            <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button flex-grow">재고 관리</button>
+            <button @click="activeTab = 'totalStock'" :class="{'active': activeTab === 'totalStock'}" class="tab-button flex-grow">총 재고 조회</button>
+            <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button flex-grow">바코드 생성</button>
+            <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button flex-grow">설정</button>
         </div>
 
         <!-- Main Content -->
@@ -44,21 +44,16 @@
             <!-- Inventory Manager Tab -->
             <div v-show="activeTab === 'manager'">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">재고 관리</h2>
-                
                 <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                    <label for="manualLocation" class="block text-sm font-medium text-gray-600 mb-2">위치 ID로 조회:</label>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="예: A-01-01" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                        <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" style="word-break: keep-all;">조회</button>
-                    </div>
+                     <label for="manualLocation" class="block text-sm font-medium text-gray-600 mb-2">위치 ID로 조회:</label>
+                     <div class="flex items-center space-x-2">
+                         <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="예: A-01-01" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                         <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" style="word-break: keep-all;">조회</button>
+                     </div>
                 </div>
-
-                <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2 bg-gray-50"></div>
+                <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
                 <button @click="toggleScan" class="w-full mb-6 px-4 py-2 text-white font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" :class="isScanning ? 'bg-red-500 hover:bg-red-600 focus:ring-red-400' : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-400'" v-text="isScanning ? '스캔 중지' : '바코드 스캔 시작'"></button>
-                <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg">
-                    <strong>선택된 위치:</strong> {{ scannedLocation }}
-                </div>
-
+                <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg"><strong>선택된 위치:</strong> {{ scannedLocation }}</div>
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold text-gray-700 mb-2">현재 재고 현황</h3>
                     <div v-if="loadingInventory" class="text-center text-gray-500">재고 정보를 불러오는 중...</div>
@@ -69,7 +64,6 @@
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품ID</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품명</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량</th>
-                                    <!-- ★ 추가: 작업 열 -->
                                     <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                                 </tr>
                             </thead>
@@ -78,12 +72,9 @@
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductID }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductName }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold" :class="item.Quantity <= 0 ? 'text-red-500' : 'text-gray-800'">{{ item.Quantity }}</td>
-                                    <!-- ★ 추가: 삭제 버튼 -->
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
                                         <button @click.stop="confirmRemoveStockItem(item)" title="이 위치에서 모든 재고 기록을 삭제합니다" class="p-1 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
-                                            </svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                                         </button>
                                     </td>
                                 </tr>
@@ -92,10 +83,9 @@
                     </div>
                     <div v-else class="text-center p-4 bg-gray-50 rounded-lg text-gray-500">해당 위치에 재고가 없거나 조회되지 않았습니다.</div>
                 </div>
-
                 <div v-if="scannedLocation">
                     <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입/출고</h3>
-                   <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                     <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
                          <div class="flex items-center space-x-2">
                              <input v-model="productId" type="text" placeholder="제품 ID (클릭, 스캔, 수동입력)" class="flex-grow w-full p-2 border border-gray-300 rounded-md">
                              <button @click="showProductScanner" type="button" class="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex-shrink-0">
@@ -112,7 +102,7 @@
                 </div>
             </div>
 
-            <!-- ★ 추가: Total Stock Inquiry Tab -->
+            <!-- Total Stock Inquiry Tab -->
             <div v-show="activeTab === 'totalStock'">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">제품별 총 재고 조회</h2>
                 <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
@@ -125,11 +115,7 @@
                     </div>
                     <button @click="fetchTotalStock" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">총 재고 조회</button>
                 </div>
-
-                <!-- Result Display -->
-                <div v-if="loadingTotalStock" class="text-center mt-6 p-4">
-                    <p class="text-gray-500">총 재고를 불러오는 중...</p>
-                </div>
+                <div v-if="loadingTotalStock" class="text-center mt-6 p-4"><p class="text-gray-500">총 재고를 불러오는 중...</p></div>
                 <div v-if="totalStockResult" class="mt-6 p-4 bg-green-100 rounded-lg">
                     <h3 class="text-lg font-semibold text-gray-800">조회 결과</h3>
                     <div class="mt-2 text-gray-700 space-y-1">
@@ -140,35 +126,30 @@
                 </div>
             </div>
 
-            <!-- ★ 변경: Barcode Generator Tab UI 수정 -->
+            <!-- Barcode Generator Tab -->
             <div v-show="activeTab === 'generator'">
-                <div class="space-y-8">
-                    <!-- Location Barcode Generator -->
-                    <div>
-                        <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
-                        <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                            <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
-                            <button @click="generateBarcode('location')" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">위치 바코드 생성</button>
-                        </div>
-                    </div>
-
-                    <!-- Product Barcode Generator -->
-                    <div>
-                        <h2 class="text-xl font-semibold mb-4 text-gray-700">제품 바코드 생성</h2>
-                        <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                            <input v-model="productIdToGenerate" type="text" placeholder="제품 ID 입력" class="w-full p-2 border border-gray-300 rounded-md">
-                            <input v-model="productNameToGenerate" type="text" placeholder="제품명 입력" class="w-full p-2 border border-gray-300 rounded-md">
-                            <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700">제품 바코드 생성</button>
-                        </div>
-                    </div>
-                    
-                    <!-- Generated Barcode Display -->
-                    <div v-if="barcodeGenerated" class="text-center p-4 border rounded-lg">
-                        <!-- <h3 class="text-lg font-semibold mb-2">{{ generatedBarcodeTitle }}</h3> -->
-                        <svg id="barcode"></svg>
-                        <button @click="printBarcode" class="mt-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">인쇄</button>
-                    </div>
-                </div>
+                 <div class="space-y-8">
+                     <div>
+                         <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
+                         <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                             <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
+                             <button @click="generateBarcode('location')" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">위치 바코드 생성</button>
+                         </div>
+                     </div>
+                     <div>
+                         <h2 class="text-xl font-semibold mb-4 text-gray-700">제품 바코드 생성</h2>
+                         <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                             <input v-model="productIdToGenerate" type="text" placeholder="제품 ID 입력" class="w-full p-2 border border-gray-300 rounded-md">
+                             <input v-model="productNameToGenerate" type="text" placeholder="제품명 입력" class="w-full p-2 border border-gray-300 rounded-md">
+                             <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700">제품 바코드 생성</button>
+                         </div>
+                     </div>
+                     <div v-if="barcodeGenerated" class="text-center p-4 border rounded-lg">
+                         <h3 class="text-lg font-semibold mb-2">{{ generatedBarcodeTitle }}</h3>
+                         <svg id="barcode"></svg>
+                         <button @click="printBarcode" class="mt-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">인쇄</button>
+                     </div>
+                 </div>
             </div>
 
             <!-- Settings Tab -->
@@ -181,58 +162,35 @@
         </main>
     </div>
 
-    <!-- Modal for notifications and confirmations -->
-    <div v-if="showModal" class="modal-overlay" @click="closeModal">
-        <div class="modal-content text-center" @click.stop>
-            <h3 class="text-xl font-semibold mb-4" :class="modalType === 'success' ? 'text-green-600' : modalType === 'error' ? 'text-red-600' : 'text-gray-800'">{{ modalTitle }}</h3>
-            <p class="text-gray-600 mb-6 whitespace-pre-wrap">{{ modalMessage }}</p>
-
-            <!-- Confirmation buttons -->
-            <div v-if="modalMode === 'confirmation'" class="flex space-x-4">
-                <button @click="closeModal" class="w-full px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400">취소</button>
-                <button @click="executePendingAction" class="w-full px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">확인</button>
-            </div>
-            <!-- Notification button -->
-            <div v-else>
-                <button @click="closeModal" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">닫기</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- ★ 변경: Modal for notifications, confirmations, and loading (하나로 통합) -->
     <div v-if="showModal" class="modal-overlay" @click="modalMode !== 'loading' && closeModal()">
         <div class="modal-content text-center" @click.stop>
-            <h3 class="text-xl font-semibold mb-4" :class="modalType === 'success' ? 'text-green-600' : modalType === 'error' ? 'text-red-600' : 'text-gray-800'">{{ modalTitle }}</h3>
-            <p class="text-gray-600 mb-6 whitespace-pre-wrap">{{ modalMessage }}</p>
-
-            <!-- 로딩 상태 표시 -->
-            <div v-if="modalMode === 'loading'">
-                <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-
-            <!-- 확인 버튼 -->
-            <div v-else-if="modalMode === 'confirmation'" class="flex space-x-4">
-                <button @click="closeModal" class="w-full px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400">취소</button>
-                <button @click="executePendingAction" class="w-full px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">확인</button>
-            </div>
+            <h3 class="text-xl font-semibold mb-4" :class="{ 'text-green-600': modalType === 'success', 'text-red-600': modalType === 'error', 'text-gray-800': modalType !== 'success' && modalType !== 'error' }">{{ modalTitle }}</h3>
             
-            <!-- 알림 버튼 -->
-            <div v-else-if="modalMode === 'notification'">
+            <div v-if="modalMode === 'loading'" class="flex justify-center items-center my-4">
+                <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            </div>
+            <p class="text-gray-600 mb-6 whitespace-pre-wrap">{{ modalMessage }}</p>
+            
+            <div v-if="modalMode === 'notification'">
                 <button @click="closeModal" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">닫기</button>
+            </div>
+            <div v-if="modalMode === 'confirmation'" class="flex justify-center space-x-4">
+                <button @click="closeModal" class="px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400">취소</button>
+                <button @click="executePendingAction" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">확인</button>
             </div>
         </div>
     </div>
 
+    <!-- Product Scanner Modal -->
     <div v-if="showProductScannerModal" class="modal-overlay">
         <div class="modal-content text-center" @click.stop>
             <h3 class="text-xl font-semibold mb-4 text-gray-800">제품 바코드 스캔</h3>
-            <!-- 제품 바코드 스캐너 렌더링 영역 -->
             <div id="product-reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
             <button @click="closeProductScanner" class="w-full mt-4 px-6 py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">스캔 중지</button>
         </div>
     </div>
+</div>
 
 <script src="./script.js"></script>
 </body>
