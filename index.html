@@ -84,15 +84,20 @@
 
                 <div v-if="scannedLocation">
                     <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입/출고</h3>
-                    <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                        <input v-model="productId" type="text" placeholder="제품 ID (바코드 또는 수동입력)" class="w-full p-2 border border-gray-300 rounded-md">
-                        <input v-model="productName" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
-                        <input v-model.number="quantity" type="number" placeholder="수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
-                        <div class="flex space-x-4">
-                            <button @click="confirmUpdateStock('IN')" class="w-full py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고</button>
-                            <button @click="confirmUpdateStock('OUT')" class="w-full py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">출고</button>
-                        </div>
-                    </div>
+                   <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                         <div class="flex items-center space-x-2">
+                             <input v-model="productId" type="text" placeholder="제품 ID (클릭, 스캔, 수동입력)" class="flex-grow w-full p-2 border border-gray-300 rounded-md">
+                             <button @click="showProductScanner" type="button" class="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex-shrink-0">
+                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                             </button>
+                         </div>
+                         <input v-model="productName" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
+                         <input v-model.number="quantity" type="number" placeholder="수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
+                         <div class="flex space-x-4">
+                             <button @click="confirmUpdateStock('IN')" class="w-full py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고</button>
+                             <button @click="confirmUpdateStock('OUT')" class="w-full py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">출고</button>
+                         </div>
+                     </div>
                 </div>
             </div>
 
@@ -137,7 +142,7 @@
         </div>
     </div>
 
-        <div v-if="showModal" class="modal-overlay" @click="modalMode !== 'loading' && closeModal()">
+    <div v-if="showModal" class="modal-overlay" @click="modalMode !== 'loading' && closeModal()">
         <div class="modal-content text-center" @click.stop>
             <h3 class="text-xl font-semibold mb-4" :class="modalType === 'success' ? 'text-green-600' : modalType === 'error' ? 'text-red-600' : 'text-gray-800'">{{ modalTitle }}</h3>
             <p class="text-gray-600 mb-6 whitespace-pre-wrap">{{ modalMessage }}</p>
@@ -162,7 +167,15 @@
             </div>
         </div>
     </div>
-</div>
+
+    <div v-if="showProductScannerModal" class="modal-overlay">
+        <div class="modal-content text-center" @click.stop>
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">제품 바코드 스캔</h3>
+            <!-- 제품 바코드 스캐너 렌더링 영역 -->
+            <div id="product-reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
+            <button @click="closeProductScanner" class="w-full mt-4 px-6 py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">스캔 중지</button>
+        </div>
+    </div>
 
 <script src="./script.js"></script>
 </body>
