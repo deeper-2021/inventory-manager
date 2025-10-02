@@ -20,6 +20,7 @@ new Vue({
         modalMessage: '',
         modalType: 'success', // 'success', 'error', or 'confirmation'
         modalMode: 'notification', // 'notification' or 'confirmation'
+        showProductScannerModal: false,
         pendingAction: null, // Stores the function to execute after confirmation
     },
     methods: {
@@ -47,6 +48,63 @@ new Vue({
                 return null;
             }
         },
+
+ // --- Product Scanner Methods ---
+        showProductScanner() {
+            this.showProductScannerModal = true;
+            this.$nextTick(() => {
+                if (!this.productScanner) {
+                    try {
+                        this.productScanner = new Html5Qrcode("product-reader");
+                    } catch (e) {
+                         this.showNotification('오류', '제품 스캐너 영역을 찾을 수 없습니다.', 'error');
+                         this.showProductScannerModal = false;
+                         return;
+                    }
+                }
+                this.startProductScan();
+            });
+        },
+
+        startProductScan() {
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 }
+            };
+            this.productScanner.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText, decodedResult) => {
+                    this.onProductScanSuccess(decodedText, decodedResult);
+                },
+                (errorMessage) => { /* Ignore scan failures */ }
+            ).catch((err) => {
+                this.showNotification('스캔 오류', '제품 스캐너를 시작할 수 없습니다. 카메라 권한을 확인해주세요.', 'error');
+                this.closeProductScanner();
+            });
+        },
+
+        onProductScanSuccess(decodedText, decodedResult) {
+            this.productId = decodedText;
+            this.closeProductScanner();
+        },
+
+        closeProductScanner() {
+            if (this.productScanner && this.productScanner.isScanning) {
+                this.productScanner.stop()
+                    .then(ignore => {
+                        this.showProductScannerModal = false;
+                    })
+                    .catch(err => {
+                        console.error("제품 스캐너를 중지하는데 실패했습니다.", err);
+                        this.showProductScannerModal = false; // Force close modal
+                    });
+            } else {
+                this.showProductScannerModal = false;
+            }
+        },
+
+
 
         // --- Modal and Confirmation Logic ---
         confirmUpdateStock(type) {
@@ -219,19 +277,30 @@ new Vue({
                 this.startScan();
             }
         },
-        startScan() {
-            if (window.location.protocol !== "https:") {
-                this.showNotification('보안 오류', '카메라를 사용하려면 HTTPS 연결이 필요합니다.', 'error');
-                return;
+       // ★ 변경: 스캐너를 시작할 때 초기화하도록 로직 변경
+        startScan() { 
+            // 스캐너 인스턴스가 없으면 새로 생성
+            if (!this.html5QrCode) {
+                try {
+                    this.html5QrCode = new Html5Qrcode("reader");
+                } catch(e) {
+                    this.showNotification('오류', '위치 스캐너 영역(#reader)을 찾을 수 없습니다.', 'error');
+                    return;
+                }
             }
-            this.isScanning = true;
+            
+            this.isScanning = true; 
             this.html5QrCode.start(
-                { facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
-                this.onScanSuccess, () => {}
-            ).catch(err => {
-                this.isScanning = false;
-                this.showNotification('스캔 오류', `카메라를 시작할 수 없습니다. 권한을 확인해주세요. (${err})`, 'error');
-            });
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: { width: 250, height: 250 } }, 
+                (decodedText, decodedResult) => {
+                    this.onScanSuccess(decodedText, decodedResult);
+                },
+                (err) => { /* Ignore scan failures */ }
+            ).catch(err => { 
+                this.isScanning = false; 
+                this.showNotification('스캔 오류', '카메라를 시작할 수 없습니다. 권한을 확인해주세요.', 'error'); 
+            }); 
         },
         stopScan() {
             if (this.isScanning && this.html5QrCode.isScanning) {
