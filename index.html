@@ -32,9 +32,10 @@
         </header>
 
         <!-- Tabs -->
-        <div class="flex justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
+        <div class="justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
             <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button w-full">재고 관리</button>
             <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button w-full">바코드 생성</button>
+            <button @click="activeTab = 'totalStock'" :class="{'active': activeTab === 'totalStock'}" class="tab-button w-full">총 재고 조회</button>
             <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button w-full">설정</button>
         </div>
 
@@ -68,13 +69,23 @@
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품ID</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품명</th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량</th>
+                                    <!-- ★ 추가: 작업 열 -->
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="item in inventory" :key="item.ProductID" @touchend="selectProduct(item)" class="cursor-pointer hover:bg-gray-100 transition-colors duration-200">
+                                <tr v-for="item in inventory" :key="item.ProductID" @click="selectProduct(item)" class="cursor-pointer hover:bg-gray-100 transition-colors duration-200">
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductID }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductName }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-bold text-gray-800">{{ item.Quantity }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-bold" :class="item.Quantity <= 0 ? 'text-red-500' : 'text-gray-800'">{{ item.Quantity }}</td>
+                                    <!-- ★ 추가: 삭제 버튼 -->
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                        <button @click.stop="confirmRemoveStockItem(item)" title="이 위치에서 모든 재고 기록을 삭제합니다" class="p-1 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -101,13 +112,59 @@
                 </div>
             </div>
 
-            <!-- Barcode Generator Tab -->
+            <!-- ★ 추가: Total Stock Inquiry Tab -->
+            <div v-show="activeTab === 'totalStock'">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">제품별 총 재고 조회</h2>
+                <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                    <p class="text-sm text-gray-600">조회하고 싶은 제품의 ID를 입력하거나 바코드를 스캔하세요.</p>
+                    <div class="flex items-center space-x-2">
+                        <input v-model="productIdForTotalStock" @keyup.enter="fetchTotalStock" type="text" placeholder="제품 ID 입력" class="flex-grow w-full p-2 border border-gray-300 rounded-md">
+                        <button @click="showProductScannerForTotalStock" type="button" class="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex-shrink-0" title="제품 바코드 스캔">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                        </button>
+                    </div>
+                    <button @click="fetchTotalStock" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">총 재고 조회</button>
+                </div>
+
+                <!-- Result Display -->
+                <div v-if="loadingTotalStock" class="text-center mt-6 p-4">
+                    <p class="text-gray-500">총 재고를 불러오는 중...</p>
+                </div>
+                <div v-if="totalStockResult" class="mt-6 p-4 bg-green-100 rounded-lg">
+                    <h3 class="text-lg font-semibold text-gray-800">조회 결과</h3>
+                    <div class="mt-2 text-gray-700 space-y-1">
+                        <p><strong>제품 ID:</strong> {{ totalStockResult.productId }}</p>
+                        <p><strong>제품명:</strong> {{ totalStockResult.productName }}</p>
+                        <p class="text-2xl font-bold mt-2"><strong>총 재고:</strong> <span :class="totalStockResult.totalQuantity <= 0 ? 'text-red-500' : 'text-green-700'">{{ totalStockResult.totalQuantity }} 개</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ★ 변경: Barcode Generator Tab UI 수정 -->
             <div v-show="activeTab === 'generator'">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
-                <div class="space-y-4">
-                    <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
-                    <button @click="generateBarcode" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">생성</button>
+                <div class="space-y-8">
+                    <!-- Location Barcode Generator -->
+                    <div>
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
+                        <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                            <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
+                            <button @click="generateBarcode('location')" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">위치 바코드 생성</button>
+                        </div>
+                    </div>
+
+                    <!-- Product Barcode Generator -->
+                    <div>
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">제품 바코드 생성</h2>
+                        <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
+                            <input v-model="productIdToGenerate" type="text" placeholder="제품 ID 입력" class="w-full p-2 border border-gray-300 rounded-md">
+                            <input v-model="productNameToGenerate" type="text" placeholder="제품명 입력" class="w-full p-2 border border-gray-300 rounded-md">
+                            <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700">제품 바코드 생성</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Generated Barcode Display -->
                     <div v-if="barcodeGenerated" class="text-center p-4 border rounded-lg">
+                        <!-- <h3 class="text-lg font-semibold mb-2">{{ generatedBarcodeTitle }}</h3> -->
                         <svg id="barcode"></svg>
                         <button @click="printBarcode" class="mt-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">인쇄</button>
                     </div>
