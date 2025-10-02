@@ -126,22 +126,24 @@ new Vue({
             this.$nextTick(() => { this.initializeAndStartProductScanner(); });
         },
 
+        // ★ 수정: 제품 스캐너 시작/종료 로직 개선
         startProductScan() {
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 }
-            };
-            this.productScanner.start(
-                { facingMode: "environment" },
-                config,
-                (decodedText, decodedResult) => {
-                    this.onProductScanSuccess(decodedText, decodedResult);
-                },
-                (errorMessage) => { /* Ignore scan failures */ }
-            ).catch((err) => {
-                this.showNotification('스캔 오류', '제품 스캐너를 시작할 수 없습니다. 카메라 권한을 확인해주세요.', 'error');
-                this.closeProductScanner();
-            });
+            try {
+                // 모달이 열릴 때마다 항상 새 인스턴스 생성
+                this.productScanner = new Html5Qrcode("product-reader");
+                this.productScanner.start(
+                    { facingMode: "environment" }, 
+                    { fps: 10, qrbox: { width: 250, height: 250 } }, 
+                    (decodedText) => { this.onProductScanSuccess(decodedText); },
+                    (err) => { /* Ignore scan failures */ }
+                ).catch(err => { 
+                    this.showNotification('스캔 오류', '제품 스캐너 카메라를 시작할 수 없습니다. 권한을 확인해주세요.', 'error'); 
+                    this.closeProductScanner();
+                });
+            } catch (e) {
+                this.showNotification('오류', '제품 스캐너 영역(#product-reader)을 찾을 수 없습니다.', 'error');
+                this.showProductScannerModal = false;
+            }
         },
 
         onProductScanSuccess(decodedText) {
