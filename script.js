@@ -21,9 +21,72 @@ new Vue({
         modalType: 'success', // 'success', 'error', or 'confirmation'
         modalMode: 'notification', // 'notification' or 'confirmation'
         showProductScannerModal: false,
+        productIdToGenerate: "",
+        productNameToGenerate: "",
+        productIdForTotalStock: "",
+        loadingTotalStock: false,
+        totalStockResult: false,
         pendingAction: null, // Stores the function to execute after confirmation
     },
     methods: {
+        // ★ 추가: 총 재고 조회 메소드
+        async fetchTotalStock() {
+            if (!this.productIdForTotalStock) {
+                this.showNotification('입력 오류', '조회할 제품 ID를 입력해주세요.', 'error');
+                return;
+            }
+            this.loadingTotalStock = true;
+            this.totalStockResult = null;
+
+            const payload = {
+                action: 'getTotalStock',
+                productId: this.productIdForTotalStock.trim(),
+            };
+
+            const data = await this.callGasApi(payload);
+            if (data) {
+                this.totalStockResult = data.data;
+            }
+            this.loadingTotalStock = false;
+        },
+
+        // ★ 추가: 재고 항목 삭제 관련 메소드
+        confirmRemoveStockItem(item) {
+            this.modalMode = 'confirmation';
+            this.modalType = 'error'; // 삭제는 위험한 작업이므로 빨간색으로 강조
+            this.modalTitle = '재고 항목 삭제 확인';
+            this.modalMessage = `정말로 위치 [${item.LocationID}]에서 제품 [${item.ProductName}]의 모든 재고 기록을 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`;
+            
+            this.pendingAction = () => this.removeStockItem(item);
+            
+            this.showModal = true;
+        },
+
+        async removeStockItem(item) {
+            this.modalMode = 'loading';
+            this.modalType = 'loading';
+            this.modalTitle = '재고 삭제 중';
+            this.modalMessage = `[${item.ProductName}] 항목을 삭제하고 있습니다...`;
+
+            const payload = {
+                action: 'removeStockItem',
+                location: item.LocationID,
+                productId: item.ProductID,
+            };
+            
+            const data = await this.callGasApi(payload);
+
+            if (data) {
+                this.showNotification(
+                    '삭제 완료',
+                    data.message || `재고가 성공적으로 삭제되었습니다.`,
+                    'success'
+                );
+                // 목록을 새로고침하여 변경사항을 즉시 반영
+                this.fetchInventory(this.scannedLocation);
+            }
+        },
+        
         // --- Central API Call Function ---
         async callGasApi(payload) {
             if (!this.gasUrl) {
@@ -49,21 +112,18 @@ new Vue({
             }
         },
 
- // --- Product Scanner Methods ---
+        // --- Product Scanner Methods ---
         showProductScanner() {
+            this.scannerTarget = 'inventory'; // 스캐너 타겟 설정
             this.showProductScannerModal = true;
-            this.$nextTick(() => {
-                if (!this.productScanner) {
-                    try {
-                        this.productScanner = new Html5Qrcode("product-reader");
-                    } catch (e) {
-                         this.showNotification('오류', '제품 스캐너 영역을 찾을 수 없습니다.', 'error');
-                         this.showProductScannerModal = false;
-                         return;
-                    }
-                }
-                this.startProductScan();
-            });
+            this.$nextTick(() => { this.initializeAndStartProductScanner(); });
+        },
+
+        // ★ 추가: 총 재고 조회를 위한 스캐너 호출
+        showProductScannerForTotalStock() {
+            this.scannerTarget = 'totalStock'; // 스캐너 타겟 설정
+            this.showProductScannerModal = true;
+            this.$nextTick(() => { this.initializeAndStartProductScanner(); });
         },
 
         startProductScan() {
@@ -84,8 +144,17 @@ new Vue({
             });
         },
 
-        onProductScanSuccess(decodedText, decodedResult) {
-            this.productId = decodedText;
+        onProductScanSuccess(decodedText) {
+            // 구분 기호 '|' 가 있는지 확인
+            if (decodedText.includes('|')) {
+                const parts = decodedText.split('|');
+                this.productId = parts[0];
+                this.productName = parts[1];
+            } else {
+                // 구분 기호가 없으면 기존 방식대로 ID만 채움 (하위 호환성)
+                this.productId = decodedText;
+                this.productName = ''; // 제품명은 비워둠
+            }
             this.closeProductScanner();
         },
 
@@ -314,8 +383,54 @@ new Vue({
         },
 
         // --- Barcode Generation ---
-        generateBarcode() { /* ... previous code ... */ },
-        printBarcode() { /* ... previous code ... */ },
+        generateBarcode(type) {
+            let dataToEncode = '';
+            if (type === 'location') {
+                if (!this.locationToGenerate) {
+                    this.showNotification('입력 오류', '위치 ID를 입력해주세요.', 'error');
+                    return;
+                }
+                dataToEncode = this.locationToGenerate;
+                this.generatedBarcodeTitle = `위치: ${dataToEncode}`;
+            } else if (type === 'product') {
+                if (!this.productIdToGenerate || !this.productNameToGenerate) {
+                    this.showNotification('입력 오류', '제품 ID와 제품명을 모두 입력해주세요.', 'error');
+                    return;
+                }
+                // ID와 이름을 '|' 기호로 합침
+                dataToEncode = `${this.productIdToGenerate}|${this.productNameToGenerate}`;
+                this.generatedBarcodeTitle = `제품: ${this.productNameToGenerate}`;
+            }
+
+            this.barcodeGenerated = true;
+            this.$nextTick(() => {
+                JsBarcode("#barcode", dataToEncode, {
+                    format: "CODE128",
+                    displayValue: true,
+                    fontSize: 18,
+                    textMargin: 5
+                });
+            });
+        },
+        printBarcode() {
+            const barcodeSVG = document.getElementById('barcode').outerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head><title>Print Barcode</title></head>
+                    <body style="text-align:center; margin-top: 50px;">
+                        ${barcodeSVG}
+                        <script>
+                            window.onload = function() {
+                                window.print();
+                                window.close();
+                            }
+                        <\/script>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+        },
 
         // --- UI Helpers ---
         showNotification(title, message, type = 'success') {
