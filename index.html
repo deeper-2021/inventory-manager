@@ -86,13 +86,24 @@
                 <div v-if="scannedLocation">
                     <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입/출고</h3>
                      <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                         <div class="flex items-center space-x-2">
+                         <!-- <div class="flex items-center space-x-2">
                              <input v-model="productId" type="text" placeholder="제품 ID (클릭, 스캔, 수동입력)" class="flex-grow w-full p-2 border border-gray-300 rounded-md">
                              <button @click="showProductScanner" type="button" class="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex-shrink-0">
                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
                              </button>
+                         </div> -->
+                         <div class="relative">
+                            <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색..." class="w-full p-2 border border-gray-300 rounded-md">
+                            <ul v-if="productSearchResults.length > 0" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
+                                <li v-for="product in productSearchResults" :key="product.ProductID" @click="selectSearchedProduct(product)" class="p-2 cursor-pointer hover:bg-indigo-100">
+                                    {{ product.ProductName }}
+                                    <span v-if="product.ProductOption1" class="text-sm text-gray-500 ml-2">({{ product.ProductOption1 }})</span>
+                                    <span v-if="product.ProductOption2" class="text-sm text-gray-500 ml-1">({{ product.ProductOption2 }})</span>
+                                </li>
+                            </ul>
                          </div>
-                         <input v-model="productName" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
+                         <!-- <input v-model="productOption1" type="text" placeholder="옵션1" class="w-full p-2 border border-gray-300 rounded-md">
+                         <input v-model="productOption2" type="text" placeholder="옵션2" class="w-full p-2 border border-gray-300 rounded-md"> -->
                          <input v-model.number="quantity" type="number" placeholder="수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
                          <div class="flex space-x-4">
                              <button @click="confirmUpdateStock('IN')" class="w-full py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고</button>
