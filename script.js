@@ -54,13 +54,6 @@ new Vue({
             this.productName = this.formatProductName(product);
             this.productSearchResults = []; // 검색 목록 숨기기
         },
-        // 기존 재고 목록에서 선택 시, 검색 목록도 닫도록 수정
-        selectProduct(item) {
-            this.productId = item.ProductID;
-            this.productName = item.ProductName;
-            this.quantity = 1;
-            this.productSearchResults = []; // 검색 목록 숨기기
-        },
 
         // onProductScanSuccess에서 제품명 자동 완성을 위해 수정
         onProductScanSuccess(decodedText) {
@@ -94,16 +87,12 @@ new Vue({
         },
 
         async fetchTotalStock() {
-            if (!this.productIdForTotalStock) {
-                this.showNotification('입력 오류', '조회할 제품 ID를 입력해주세요.', 'error');
-                return;
-            }
             this.loadingTotalStock = true;
             this.totalStockResult = null;
 
             const payload = {
                 action: 'getTotalStock',
-                productId: this.productIdForTotalStock.trim(),
+                productId: this.productId,
             };
 
             const data = await this.callGasApi(payload);
@@ -307,8 +296,7 @@ new Vue({
 
         selectProduct(item) {
             this.productId = item.ProductID;
-            this.productName = item.ProductName;
-            // 수량은 1로 초기화하여 사용자가 새로 입력하도록 유도
+            this.productName = this.formatProductName(item);
             this.quantity = 1; 
         },
 
