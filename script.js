@@ -9,6 +9,7 @@ new Vue({
         loadingInventory: false,
         productId: '',
         productName: '',
+        products: [],
         quantity: 1,
         locationToGenerate: '',
         barcodeGenerated: false,
@@ -21,6 +22,7 @@ new Vue({
         modalType: 'success', // 'success', 'error', or 'confirmation'
         modalMode: 'notification', // 'notification' or 'confirmation'
         showProductScannerModal: false,
+        productSearchResults: [],
         productIdToGenerate: "",
         productNameToGenerate: "",
         productIdForTotalStock: "",
@@ -29,7 +31,68 @@ new Vue({
         pendingAction: null, // Stores the function to execute after confirmation
     },
     methods: {
-        // ★ 추가: 총 재고 조회 메소드
+        searchProducts() {
+            const searchTerm = this.productName.trim().toLowerCase();
+            if (searchTerm === '') {
+                this.productSearchResults = [];
+                return;
+            }
+            
+            // 검색어를 공백 기준으로 나눠서 배열로 만듭니다. (예: "소총 우드" -> ["소총", "우드"])
+            const searchKeywords = searchTerm.split(' ').filter(k => k);
+
+            this.productSearchResults = this.products.filter(p => {
+                const fullName = `${p.ProductName} ${p.ProductOption1 || ''} ${p.ProductOption2 || ''}`.toLowerCase();
+                
+                // 모든 검색 키워드가 제품명에 포함되어 있는지 확인합니다.
+                return searchKeywords.every(keyword => fullName.includes(keyword));
+            });
+        },
+        selectSearchedProduct(product) {
+            this.productId = product.ProductID;
+            // 옵션을 포함한 전체 이름으로 설정
+            this.productName = this.formatProductName(product);
+            this.productSearchResults = []; // 검색 목록 숨기기
+        },
+        // 기존 재고 목록에서 선택 시, 검색 목록도 닫도록 수정
+        selectProduct(item) {
+            this.productId = item.ProductID;
+            this.productName = item.ProductName;
+            this.quantity = 1;
+            this.productSearchResults = []; // 검색 목록 숨기기
+        },
+
+        // onProductScanSuccess에서 제품명 자동 완성을 위해 수정
+        onProductScanSuccess(decodedText) {
+            let scannedProductId = decodedText;
+            let scannedProductName = '';
+
+            if (decodedText.includes('|')) {
+                const parts = decodedText.split('|');
+                scannedProductId = parts[0];
+                scannedProductName = parts[1];
+            }
+
+            if (this.scannerTarget === 'totalStock') {
+                this.productIdForTotalStock = scannedProductId;
+                this.fetchTotalStock();
+            } else { 
+                this.productId = scannedProductId;
+                // 스캔된 이름이 있으면 사용, 없으면 products 목록에서 찾기
+                if (scannedProductName) {
+                        this.productName = scannedProductName;
+                } else {
+                    const foundProduct = this.products.find(p => p.ProductID == this.productId);
+                    if (foundProduct) {
+                        this.productName = `${foundProduct.ProductName} ${foundProduct.ProductOption1 || ''} ${foundProduct.ProductOption2 || ''}`.trim();
+                    } else {
+                        this.productName = ''; // 못 찾으면 비워두기
+                    }
+                }
+            }
+            this.closeProductScanner();
+        },
+
         async fetchTotalStock() {
             if (!this.productIdForTotalStock) {
                 this.showNotification('입력 오류', '조회할 제품 ID를 입력해주세요.', 'error');
@@ -50,6 +113,19 @@ new Vue({
             this.loadingTotalStock = false;
         },
 
+        async fetchProducts() {
+            const payload = {
+                action: 'getProducts',
+            };
+            
+            const data = await this.callGasApi(payload);
+
+            if (data && data.data) {
+                this.products = data.data;
+                console.log("제품 목록 저장 완료:", this.products); 
+            }
+        },
+
         // ★ 추가: 재고 항목 삭제 관련 메소드
         confirmRemoveStockItem(item) {
             this.modalMode = 'confirmation';
@@ -62,31 +138,33 @@ new Vue({
             this.showModal = true;
         },
 
+        // ★ 수정: removeStockItem의 payload 변경
         async removeStockItem(item) {
             this.modalMode = 'loading';
             this.modalType = 'loading';
             this.modalTitle = '재고 삭제 중';
-            this.modalMessage = `[${item.ProductName}] 항목을 삭제하고 있습니다...`;
+            this.modalMessage = `[${this.formatProductName(item)}] 항목을 삭제하고 있습니다...`;
 
             const payload = {
                 action: 'removeStockItem',
                 location: item.LocationID,
                 productId: item.ProductID,
+                productOption1: item.ProductOption1,
+                productOption2: item.ProductOption2,
             };
             
             const data = await this.callGasApi(payload);
-
             if (data) {
-                this.showNotification(
-                    '삭제 완료',
-                    data.message || `재고가 성공적으로 삭제되었습니다.`,
-                    'success'
-                );
-                // 목록을 새로고침하여 변경사항을 즉시 반영
+                this.showNotification('삭제 완료', data.message, 'success');
                 this.fetchInventory(this.scannedLocation);
             }
         },
-        
+
+        // ★ 추가: 제품 이름 포맷팅 헬퍼 함수
+        formatProductName(product) {
+            if (!product) return '';
+            return `${product.ProductName || ''} ${product.ProductOption1 || ''} ${product.ProductOption2 || ''}`.trim();
+        },
         // --- Central API Call Function ---
         async callGasApi(payload) {
             if (!this.gasUrl) {
@@ -214,34 +292,7 @@ new Vue({
             this.modalMode = 'notification';
         },
 
-        // --- Core Application Logic ---
-        async updateStock(type) {
-            const payload = {
-                action: 'updateStock',
-                location: this.scannedLocation,
-                productId: this.productId.trim(),
-                productName: this.productName.trim(),
-                quantity: this.quantity,
-                type: type
-            };
-            
-            const data = await this.callGasApi(payload);
-
-            if (data) {
-                this.showNotification(
-                    `${type === 'IN' ? '입고' : '출고'} 완료`,
-                    data.message || `[${this.productName}] 처리가 완료되었습니다.`, // Use message from server
-                    'success'
-                );
-                // Clear form and refresh inventory
-                this.productId = '';
-                this.productName = '';
-                this.quantity = 1;
-                this.fetchInventory(this.scannedLocation);
-            }
-        },
-
-                // ★ 변경: 모달을 닫지 않고, 저장된 액션(updateStock)만 실행
+        // ★ 변경: 모달을 닫지 않고, 저장된 액션(updateStock)만 실행
         executePendingAction() {
             if (typeof this.pendingAction === 'function') {
                 this.pendingAction(); // updateStock이 호출되며, 이 함수가 모달 상태를 'loading'으로 바꿀 것임
@@ -261,38 +312,34 @@ new Vue({
             this.quantity = 1; 
         },
 
-        // --- Core Application Logic ---
-        // ★ 변경: 로딩 모달 표시/숨김 로직 추가
         async updateStock(type) {
-            // 1. 모달 내용을 '로딩' 상태로 즉시 변경
-            this.modalMode = 'loading';
-            this.modalType = 'loading';
-            this.modalTitle = '재고 처리 중';
-            this.modalMessage = '서버와 통신 중입니다. 잠시만 기다려주세요...';
+            // productId로부터 제품 전체 정보 다시 찾기 (정확한 데이터 전송을 위해)
+            const productInfo = this.products.find(p => p.ProductID == this.productId);
+            if (!productInfo) {
+                this.showNotification('오류', '제품 목록에 없는 제품 ID입니다. 먼저 제품을 등록해주세요.', 'error');
+                return;
+            }
+
+            this.modalMode = 'loading'; this.modalType = 'loading'; this.modalTitle = '재고 처리 중'; this.modalMessage = '서버와 통신 중입니다...';
 
             const payload = {
                 action: 'updateStock',
                 location: this.scannedLocation,
-                productId: this.productId.trim(),
-                productName: this.productName.trim(),
+                productId: productInfo.ProductID,
+                productName: productInfo.ProductName, // 기본 이름
+                productOption1: productInfo.ProductOption1,
+                productOption2: productInfo.ProductOption2,
                 quantity: this.quantity,
                 type: type
             };
             
-            // 2. API 호출 (성공/실패 시 callGasApi 내부 또는 아래에서 모달 내용을 바꿈)
             const data = await this.callGasApi(payload);
-
-            // 3. 성공 시, 로딩 모달 내용을 '성공' 알림으로 변경
             if (data) {
-                this.showNotification(
-                    `${type === 'IN' ? '입고' : '출고'} 완료`,
-                    data.message || `[${this.productName}] 처리가 완료되었습니다.`,
-                    'success'
-                );
-                this.productId = '';
-                this.productName = '';
-                this.quantity = 1;
+                this.showNotification(`${type === 'IN' ? '입고' : '출고'} 완료`, data.message, 'success');
+                this.productId = ''; this.productName = ''; this.quantity = 1;
                 this.fetchInventory(this.scannedLocation);
+            } else {
+                this.closeModal();
             }
         },
 
@@ -446,6 +493,7 @@ new Vue({
     mounted() {
         this.loadSettings();
         this.initializeScanner();
+        this.fetchProducts(); 
     },
     watch: {
         activeTab(newTab, oldTab) {
