@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>간편 재고 관리 시스템</title>
-    <!-- Vue.js and Barcode Scanner Libraries -->
+    <title>창고 재고 관리 시스템</title>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://rsms.me/inter/inter.css');
@@ -18,7 +16,7 @@
         .tab-button:hover { background-color: #F3F4F6; }
         .tab-button.active { color: #4F46E5; border-bottom-color: #4F46E5; font-weight: 600; }
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 50; }
-        .modal-content { background: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 500px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); transform: scale(0.95); opacity: 0; animation: fadeInScale 0.3s ease-out forwards; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 500px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); transform: scale(0.95); opacity: 0; animation: fadeInScale 0.3s ease-out forwards; }
         @keyframes fadeInScale { to { transform: scale(1); opacity: 1; } }
     </style>
 </head>
@@ -26,12 +24,10 @@
 
 <div id="app" class="max-w-4xl mx-auto p-4 md:p-6">
     <div class="bg-white rounded-xl shadow-lg">
-        <!-- Header -->
         <header class="p-5 border-b border-gray-200">
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 간편 재고 관리 시스템</h1>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 재고 관리 시스템</h1>
         </header>
 
-        <!-- ★ 변경: Tabs 레이아웃 수정 (flex 추가) -->
         <div class="flex flex-wrap justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
             <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button flex-grow">재고 관리</button>
             <button @click="activeTab = 'totalStock'" :class="{'active': activeTab === 'totalStock'}" class="tab-button flex-grow">총 재고 조회</button>
@@ -39,189 +35,191 @@
             <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button flex-grow">설정</button>
         </div>
 
-        <!-- Main Content -->
         <main class="p-5 md:p-8">
-            <!-- Inventory Manager Tab -->
+            <!-- 재고 관리 탭 -->
             <div v-show="activeTab === 'manager'">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">재고 관리</h2>
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">로케이션(위치) 스캔 및 조회</h2>
                 <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                     <label for="manualLocation" class="block text-sm font-medium text-gray-600 mb-2">위치 ID로 조회:</label>
                      <div class="flex items-center space-x-2">
-                         <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="예: A-01-01" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-                         <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" style="word-break: keep-all;">조회</button>
+                         <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="위치 바코드 입력 (예: A-01)" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm">
+                         <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700">조회</button>
                      </div>
                 </div>
-                <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
-                <button @click="toggleScan" class="w-full mb-6 px-4 py-2 text-white font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" :class="isScanning ? 'bg-red-500 hover:bg-red-600 focus:ring-red-400' : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-400'" v-text="isScanning ? '스캔 중지' : '바코드 스캔 시작'"></button>
-                <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg"><strong>선택된 위치:</strong> {{ scannedLocation }}</div>
+                <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2" v-show="isScanningLocation"></div>
+                <button @click="toggleLocationScan" class="w-full mb-6 px-4 py-2 text-white font-semibold rounded-md shadow-sm" :class="isScanningLocation ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'" v-text="isScanningLocation ? '카메라 끄기' : '📷 위치 바코드 카메라 스캔'"></button>
+                
+                <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg"><strong>현재 작업 위치:</strong> {{ scannedLocation }}</div>
+                
+                <!-- 재고 현황 -->
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold text-gray-700 mb-2">현재 재고 현황</h3>
-                    <div v-if="loadingInventory" class="text-center text-gray-500">재고 정보를 불러오는 중...</div>
+                    <div v-if="loadingInventory" class="text-center text-gray-500">정보를 불러오는 중...</div>
                     <div v-else-if="inventory.length > 0" class="overflow-x-auto bg-white border border-gray-200 rounded-lg">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품ID</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제품명</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">옵션1</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">옵션2</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량</th>
-                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">제품ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">제품명</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">옵션</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">수량</th>
+                                    <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">작업</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="item in inventory" :key="item.ProductID" @click="selectProduct(item)" class="cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductID }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductName }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductOption1 }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.ProductOption2 }}</td>
+                                <tr v-for="item in inventory" :key="item.ProductID" @click="selectProduct(item)" class="cursor-pointer hover:bg-gray-100 transition-colors">
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm">{{ item.ProductID }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm">{{ item.ProductName }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm">{{ item.ProductOption1 }} {{ item.ProductOption2 }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-bold" :class="item.Quantity <= 0 ? 'text-red-500' : 'text-gray-800'">{{ item.Quantity }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
-                                        <button @click.stop="confirmRemoveStockItem(item)" title="이 위치에서 모든 재고 기록을 삭제합니다" class="p-1 text-red-500 hover:text-red-700 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
-                                        </button>
+                                        <button @click.stop="confirmRemoveStockItem(item)" class="text-red-500 hover:text-red-700 p-1">삭제</button>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div v-else class="text-center p-4 bg-gray-50 rounded-lg text-gray-500">해당 위치에 재고가 없거나 조회되지 않았습니다.</div>
+                    <div v-else class="text-center p-4 bg-gray-50 rounded-lg text-gray-500">해당 위치에 조회된 재고가 없습니다.</div>
                 </div>
+
+                <!-- 입출고 및 이동 폼 -->
                 <div v-if="scannedLocation">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입/출고</h3>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">재고 입고 / 출고 / 이동</h3>
                      <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                         <div class="relative">
-                            <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색..." class="w-full p-2 border border-gray-300 rounded-md">
-                            <ul v-if="productSearchResults.length > 0" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
-                                <li v-for="product in productSearchResults" :key="product.ProductID" @click="selectSearchedProduct(product)" class="p-2 cursor-pointer hover:bg-indigo-100">
-                                    {{ product.ProductName }}
-                                    <span v-if="product.ProductOption1" class="text-sm text-gray-500 ml-2">({{ product.ProductOption1 }})</span>
-                                    <span v-if="product.ProductOption2" class="text-sm text-gray-500 ml-1">({{ product.ProductOption2 }})</span>
-                                </li>
-                            </ul>
+                        <div class="flex space-x-2">
+                            <div class="relative flex-grow">
+                                <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색 또는 스캔..." class="w-full p-2 border border-gray-300 rounded-md">
+                                <ul v-if="productSearchResults.length > 0" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
+                                    <li v-for="product in productSearchResults" :key="product.ProductID" @click="selectSearchedProduct(product)" class="p-2 cursor-pointer hover:bg-indigo-100">
+                                        {{ product.ProductName }} ({{ product.ProductOption1 }} {{ product.ProductOption2 }})
+                                    </li>
+                                </ul>
+                            </div>
+                            <button @click="showProductScanner" class="px-3 py-2 bg-gray-800 text-white rounded-md">📷 스캔</button>
+                        </div>
+                        
+                         <input v-model.number="quantity" type="number" placeholder="작업 수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
+                         
+                         <div class="grid grid-cols-3 gap-2">
+                             <button @click="confirmUpdateStock('IN')" class="py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고 (IN)</button>
+                             <button @click="confirmUpdateStock('OUT')" class="py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">출고 (OUT)</button>
+                             <button @click="targetLocationInput = !targetLocationInput" class="py-2 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600">이동 (MOVE)</button>
                          </div>
-                         <input v-model.number="quantity" type="number" placeholder="수량" min="1" class="w-full p-2 border border-gray-300 rounded-md">
-                         <div class="flex space-x-4">
-                             <button @click="confirmUpdateStock('IN')" class="w-full py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600">입고</button>
-                             <button @click="confirmUpdateStock('OUT')" class="w-full py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">출고</button>
+
+                         <!-- 재고 이동을 위한 도착지 입력 폼 -->
+                         <div v-if="targetLocationInput" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md slide-down">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">도착 로케이션 (이동할 위치)</label>
+                            <div class="flex space-x-2">
+                                <input v-model="targetLocationId" type="text" placeholder="예: B-02" class="flex-grow p-2 border border-gray-300 rounded-md">
+                                <button @click="confirmMoveStock" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md">이동 실행</button>
+                            </div>
                          </div>
                      </div>
                 </div>
             </div>
 
-            <!-- Total Stock Inquiry Tab -->
+            <!-- 총 재고 조회 탭 -->
             <div v-show="activeTab === 'totalStock'">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">제품별 총 재고 조회</h3>
                 <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                    <div class="relative">
-                    <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색..." class="w-full p-2 border border-gray-300 rounded-md">
-                    <ul v-if="productSearchResults.length > 0" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
-                        <li v-for="product in productSearchResults" :key="product.ProductID" @click="selectSearchedProduct(product)" class="p-2 cursor-pointer hover:bg-indigo-100">
-                            {{ product.ProductName }}
-                            <span v-if="product.ProductOption1" class="text-sm text-gray-500 ml-2">({{ product.ProductOption1 }})</span>
-                            <span v-if="product.ProductOption2" class="text-sm text-gray-500 ml-1">({{ product.ProductOption2 }})</span>
-                        </li>
-                    </ul>
+                    <div class="flex space-x-2">
+                        <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색..." class="flex-grow p-2 border border-gray-300 rounded-md">
+                        <button @click="showProductScannerForTotalStock" class="px-3 py-2 bg-gray-800 text-white rounded-md">📷 스캔</button>
                     </div>
                     <button @click="fetchTotalStock" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">총 재고 조회</button>
                 </div>
-                <div v-if="loadingTotalStock" class="text-center mt-6 p-4"><p class="text-gray-500">총 재고를 불러오는 중...</p></div>
+                
+                <div v-if="loadingTotalStock" class="text-center mt-6 p-4"><p class="text-gray-500">데이터 로딩 중...</p></div>
 
-                <div v-if="totalStockResult">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">조회 결과</h3>
+                <div v-if="totalStockResult && totalStockResult.locations">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2 mt-4">[{{ totalStockResult.productName }}] 재고 분포</h3>
                     <div class="overflow-x-auto bg-white border border-gray-200 rounded-lg">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">위치ID</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">위치ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">수량</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="item in totalStockResult.locations" :key="item.locationId" class="cursor-pointer hover:bg-gray-100 transition-colors duration-200">
+                                <tr v-for="item in totalStockResult.locations" :key="item.locationId">
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.locationId }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-800">{{ item.quantity }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-semibold">{{ item.quantity }}</td>
                                 </tr>
                             </tbody>
-                            <tfoot class="bg-gray-50">
+                            <tfoot class="bg-indigo-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총재고</th>
-                                    <td class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ totalStockResult.totalQuantity }}</td>
+                                    <th class="px-4 py-3 text-left font-bold text-gray-800 uppercase">총 재고</th>
+                                    <td class="px-4 py-3 text-left font-bold text-indigo-600 text-lg">{{ totalStockResult.totalQuantity }}</td>
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
-
-                    <!-- <div class="mt-2 text-gray-700 space-y-1">
-                        <p><strong>제품ID:</strong> {{ totalStockResult.productId }}</p>
-                        <p><strong>제품명:</strong> {{ totalStockResult.productName }}</p>
-                        <p class="text-2xl font-bold mt-2"><strong>총 재고:</strong> <span :class="totalStockResult.totalQuantity <= 0 ? 'text-red-500' : 'text-green-700'">{{ totalStockResult.totalQuantity }} 개</span></p>
-                    </div> -->
                 </div>
             </div>
 
-            <!-- Barcode Generator Tab -->
+            <!-- 바코드 생성 탭 -->
             <div v-show="activeTab === 'generator'">
                  <div class="space-y-8">
                      <div>
-                         <h2 class="text-xl font-semibold mb-4 text-gray-700">위치 바코드 생성</h2>
-                         <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                             <input v-model="locationToGenerate" type="text" placeholder="위치 ID 입력 (예: A-01-01)" class="w-full p-2 border border-gray-300 rounded-md">
-                             <button @click="generateBarcode('location')" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">위치 바코드 생성</button>
+                         <h2 class="text-xl font-semibold mb-2 text-gray-700">로케이션 바코드 생성</h2>
+                         <div class="flex space-x-2 p-4 bg-gray-50 rounded-lg">
+                             <input v-model="locationToGenerate" type="text" placeholder="위치 ID (예: A-01-01)" class="flex-grow p-2 border border-gray-300 rounded-md">
+                             <button @click="generateBarcode('location')" class="px-4 py-2 bg-indigo-600 text-white rounded-md">생성</button>
                          </div>
                      </div>
                      <div>
-                         <h2 class="text-xl font-semibold mb-4 text-gray-700">제품 바코드 생성</h2>
-                         <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
-                             <input v-model="productIdToGenerate" type="text" placeholder="제품 ID 입력" class="w-full p-2 border border-gray-300 rounded-md">
-                             <input v-model="productNameToGenerate" type="text" placeholder="제품명 입력" class="w-full p-2 border border-gray-300 rounded-md">
-                             <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700">제품 바코드 생성</button>
+                         <h2 class="text-xl font-semibold mb-2 text-gray-700">제품 바코드 생성</h2>
+                         <div class="space-y-2 p-4 bg-gray-50 rounded-lg">
+                             <input v-model="productIdToGenerate" type="text" placeholder="제품 ID (예: SKU-1001)" class="w-full p-2 border border-gray-300 rounded-md">
+                             <input v-model="productNameToGenerate" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
+                             <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white rounded-md">제품 생성</button>
                          </div>
                      </div>
-                     <div v-if="barcodeGenerated" class="text-center p-4 border rounded-lg">
-                         <h3 class="text-lg font-semibold mb-2">{{ generatedBarcodeTitle }}</h3>
+                     <div v-if="barcodeGenerated" class="text-center p-6 border rounded-lg bg-white">
+                         <h3 class="text-lg font-semibold mb-4">{{ generatedBarcodeTitle }}</h3>
                          <svg id="barcode"></svg>
-                         <button @click="printBarcode" class="mt-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">인쇄</button>
+                         <button @click="printBarcode" class="mt-4 px-6 py-2 bg-gray-800 text-white font-semibold rounded-md hover:bg-gray-700">🖨️ 인쇄하기</button>
                      </div>
                  </div>
             </div>
 
-            <!-- Settings Tab -->
+            <!-- 설정 탭 -->
             <div v-show="activeTab === 'settings'">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">설정</h2>
-                <label for="gasUrl" class="block text-sm font-medium text-gray-600">Google Apps Script URL:</label>
-                <input id="gasUrl" v-model="gasUrl" type="text" placeholder="배포된 웹 앱 URL을 붙여넣으세요" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                <button @click="saveSettings" class="mt-4 w-full py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">저장</button>
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">앱 설정</h2>
+                <label class="block text-sm font-medium text-gray-600">Google Apps Script 웹 앱 URL</label>
+                <input v-model="gasUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                <button @click="saveSettings" class="mt-4 w-full py-2 bg-indigo-600 text-white font-semibold rounded-md">저장</button>
             </div>
         </main>
     </div>
 
-    <!-- ★ 변경: Modal for notifications, confirmations, and loading (하나로 통합) -->
+    <!-- 통합 모달 창 -->
     <div v-if="showModal" class="modal-overlay" @click="modalMode !== 'loading' && closeModal()">
         <div class="modal-content text-center" @click.stop>
-            <h3 class="text-xl font-semibold mb-4" :class="{ 'text-green-600': modalType === 'success', 'text-red-600': modalType === 'error', 'text-gray-800': modalType !== 'success' && modalType !== 'error' }">{{ modalTitle }}</h3>
+            <h3 class="text-xl font-semibold mb-4" :class="{'text-green-600': modalType==='success', 'text-red-600': modalType==='error', 'text-gray-800': !['success','error'].includes(modalType)}">{{ modalTitle }}</h3>
             
             <div v-if="modalMode === 'loading'" class="flex justify-center items-center my-4">
                 <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
             </div>
+            
             <p class="text-gray-600 mb-6 whitespace-pre-wrap">{{ modalMessage }}</p>
             
             <div v-if="modalMode === 'notification'">
-                <button @click="closeModal" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">닫기</button>
+                <button @click="closeModal" class="px-6 py-2 bg-indigo-600 text-white rounded-md">닫기</button>
             </div>
             <div v-if="modalMode === 'confirmation'" class="flex justify-center space-x-4">
-                <button @click="closeModal" class="px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400">취소</button>
-                <button @click="executePendingAction" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700">확인</button>
+                <button @click="closeModal" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-md">취소</button>
+                <button @click="executePendingAction" class="px-6 py-2 bg-indigo-600 text-white rounded-md">확인</button>
             </div>
         </div>
     </div>
 
-    <!-- Product Scanner Modal -->
+    <!-- 제품 스캐너 모달 -->
     <div v-if="showProductScannerModal" class="modal-overlay">
         <div class="modal-content text-center" @click.stop>
             <h3 class="text-xl font-semibold mb-4 text-gray-800">제품 바코드 스캔</h3>
             <div id="product-reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
-            <button @click="closeProductScanner" class="w-full mt-4 px-6 py-2 bg-red-500 text-white font-semibold rounded-md hover:bg-red-600">스캔 중지</button>
+            <button @click="closeProductScanner" class="w-full mt-4 px-6 py-2 bg-red-500 text-white rounded-md">닫기</button>
         </div>
     </div>
 </div>
@@ -229,4 +227,3 @@
 <script src="./script.js"></script>
 </body>
 </html>
-
