@@ -255,16 +255,13 @@ new Vue({
             
             this.$nextTick(() => {
                 const canvas = document.getElementById('qrcode-canvas');
-                // 기존 캔버스 초기화 후 새로 생성
-                QRCode.toCanvas(canvas, data, { 
-                    width: 200, 
-                    margin: 2,
-                    color: {
-                        dark: '#000000',
-                        light: '#ffffff'
-                    }
-                }, function (error) {
-                    if (error) console.error(error);
+                // QRious 라이브러리를 사용하여 캔버스에 QR 생성
+                new QRious({
+                    element: canvas,
+                    value: data,
+                    size: 200,          // QR 코드 크기
+                    background: '#fff', // 배경색
+                    foreground: '#000'  // QR코드 색상
                 });
             });
         },
