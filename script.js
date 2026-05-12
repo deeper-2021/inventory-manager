@@ -19,8 +19,8 @@ new Vue({
         locationToGenerate: '',
         productIdToGenerate: "",
         productNameToGenerate: "",
-        barcodeGenerated: false,
-        generatedBarcodeTitle: '',
+        qrGenerated: false,
+        generatedQrTitle: '',
         
         html5QrCodeLocation: null,
         html5QrCodeProduct: null,
@@ -245,19 +245,47 @@ new Vue({
             }
         },
 
-        // --- Barcode Generator ---
-        generateBarcode(type) {
+        // --- QR Generator ---
+        generateQr(type) {
             let data = type === 'location' ? this.locationToGenerate : `${this.productIdToGenerate}|${this.productNameToGenerate}`;
             if (!data || data === '|') return this.showNotification('오류', '값을 입력해주세요.', 'error');
             
-            this.generatedBarcodeTitle = type === 'location' ? `로케이션: ${data}` : `제품: ${this.productNameToGenerate}`;
-            this.barcodeGenerated = true;
-            this.$nextTick(() => { JsBarcode("#barcode", data, { format: "CODE128", displayValue: true }); });
+            this.generatedQrTitle = type === 'location' ? `로케이션: ${data}` : `제품: ${this.productNameToGenerate}`;
+            this.qrGenerated = true;
+            
+            this.$nextTick(() => {
+                const canvas = document.getElementById('qrcode-canvas');
+                // 기존 캔버스 초기화 후 새로 생성
+                QRCode.toCanvas(canvas, data, { 
+                    width: 200, 
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#ffffff'
+                    }
+                }, function (error) {
+                    if (error) console.error(error);
+                });
+            });
         },
-        printBarcode() {
-            const svg = document.getElementById('barcode').outerHTML;
+        printQr() {
+            const canvas = document.getElementById('qrcode-canvas');
+            const dataUrl = canvas.toDataURL(); // 캔버스를 이미지로 변환
             const win = window.open('', '_blank');
-            win.document.write(`<body style="text-align:center;margin-top:50px;">${svg}<script>window.onload=()=>{window.print();window.close();}<\/script></body>`);
+            win.document.write(`
+                <html>
+                <head><title>Print QR</title></head>
+                <body style="text-align:center; margin-top: 50px;">
+                    <img src="${dataUrl}" style="width:200px; height:200px;" />
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            window.close();
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `);
             win.document.close();
         },
 
