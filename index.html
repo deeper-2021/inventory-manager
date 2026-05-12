@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>창고 재고 관리 시스템</title>
+    <!-- Vue.js, html5-qrcode(스캐너), qrcode(생성기) 라이브러리 로드 -->
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://rsms.me/inter/inter.css');
@@ -25,13 +26,13 @@
 <div id="app" class="max-w-4xl mx-auto p-4 md:p-6">
     <div class="bg-white rounded-xl shadow-lg">
         <header class="p-5 border-b border-gray-200">
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 재고 관리 시스템</h1>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 text-center">📦 재고 관리 시스템 (QR)</h1>
         </header>
 
         <div class="flex flex-wrap justify-around border-b border-gray-200 bg-gray-50 rounded-t-xl">
             <button @click="activeTab = 'manager'" :class="{'active': activeTab === 'manager'}" class="tab-button flex-grow">재고 관리</button>
             <button @click="activeTab = 'totalStock'" :class="{'active': activeTab === 'totalStock'}" class="tab-button flex-grow">총 재고 조회</button>
-            <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button flex-grow">바코드 생성</button>
+            <button @click="activeTab = 'generator'" :class="{'active': activeTab === 'generator'}" class="tab-button flex-grow">QR 생성</button>
             <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab-button flex-grow">설정</button>
         </div>
 
@@ -41,12 +42,12 @@
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">로케이션(위치) 스캔 및 조회</h2>
                 <div class="mb-6 bg-gray-50 p-4 rounded-lg">
                      <div class="flex items-center space-x-2">
-                         <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="위치 바코드 입력 (예: A-01)" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm">
+                         <input type="text" id="manualLocation" v-model="manualLocationId" @keyup.enter="fetchInventoryByManualInput" placeholder="위치 QR 입력 (예: A-01)" class="flex-grow min-w-0 p-2 border border-gray-300 rounded-md shadow-sm">
                          <button @click="fetchInventoryByManualInput" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700">조회</button>
                      </div>
                 </div>
                 <div id="reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2" v-show="isScanningLocation"></div>
-                <button @click="toggleLocationScan" class="w-full mb-6 px-4 py-2 text-white font-semibold rounded-md shadow-sm" :class="isScanningLocation ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'" v-text="isScanningLocation ? '카메라 끄기' : '📷 위치 바코드 카메라 스캔'"></button>
+                <button @click="toggleLocationScan" class="w-full mb-6 px-4 py-2 text-white font-semibold rounded-md shadow-sm" :class="isScanningLocation ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'" v-text="isScanningLocation ? '카메라 끄기' : '📷 위치 QR 카메라 스캔'"></button>
                 
                 <div v-if="scannedLocation" class="text-center p-3 mb-4 bg-green-100 text-green-800 rounded-lg"><strong>현재 작업 위치:</strong> {{ scannedLocation }}</div>
                 
@@ -87,7 +88,7 @@
                      <div class="space-y-4 p-4 bg-gray-50 rounded-lg">
                         <div class="flex space-x-2">
                             <div class="relative flex-grow">
-                                <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색 또는 스캔..." class="w-full p-2 border border-gray-300 rounded-md">
+                                <input v-model="productName" @input="searchProducts" type="text" placeholder="제품명 검색 또는 QR 스캔..." class="w-full p-2 border border-gray-300 rounded-md">
                                 <ul v-if="productSearchResults.length > 0" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">
                                     <li v-for="product in productSearchResults" :key="product.ProductID" @click="selectSearchedProduct(product)" class="p-2 cursor-pointer hover:bg-indigo-100">
                                         {{ product.ProductName }} ({{ product.ProductOption1 }} {{ product.ProductOption2 }})
@@ -157,28 +158,29 @@
                 </div>
             </div>
 
-            <!-- 바코드 생성 탭 -->
+            <!-- 바코드 생성 탭 (QR) -->
             <div v-show="activeTab === 'generator'">
                  <div class="space-y-8">
                      <div>
-                         <h2 class="text-xl font-semibold mb-2 text-gray-700">로케이션 바코드 생성</h2>
+                         <h2 class="text-xl font-semibold mb-2 text-gray-700">로케이션 QR 생성</h2>
                          <div class="flex space-x-2 p-4 bg-gray-50 rounded-lg">
                              <input v-model="locationToGenerate" type="text" placeholder="위치 ID (예: A-01-01)" class="flex-grow p-2 border border-gray-300 rounded-md">
-                             <button @click="generateBarcode('location')" class="px-4 py-2 bg-indigo-600 text-white rounded-md">생성</button>
+                             <button @click="generateQr('location')" class="px-4 py-2 bg-indigo-600 text-white rounded-md">생성</button>
                          </div>
                      </div>
                      <div>
-                         <h2 class="text-xl font-semibold mb-2 text-gray-700">제품 바코드 생성</h2>
+                         <h2 class="text-xl font-semibold mb-2 text-gray-700">제품 QR 생성</h2>
                          <div class="space-y-2 p-4 bg-gray-50 rounded-lg">
                              <input v-model="productIdToGenerate" type="text" placeholder="제품 ID (예: SKU-1001)" class="w-full p-2 border border-gray-300 rounded-md">
                              <input v-model="productNameToGenerate" type="text" placeholder="제품명" class="w-full p-2 border border-gray-300 rounded-md">
-                             <button @click="generateBarcode('product')" class="w-full py-2 bg-teal-600 text-white rounded-md">제품 생성</button>
+                             <button @click="generateQr('product')" class="w-full py-2 bg-teal-600 text-white rounded-md">제품 QR 생성</button>
                          </div>
                      </div>
-                     <div v-if="barcodeGenerated" class="text-center p-6 border rounded-lg bg-white">
-                         <h3 class="text-lg font-semibold mb-4">{{ generatedBarcodeTitle }}</h3>
-                         <svg id="barcode"></svg>
-                         <button @click="printBarcode" class="mt-4 px-6 py-2 bg-gray-800 text-white font-semibold rounded-md hover:bg-gray-700">🖨️ 인쇄하기</button>
+                     <div v-if="qrGenerated" class="text-center p-6 border rounded-lg bg-white flex flex-col items-center">
+                         <h3 class="text-lg font-semibold mb-4">{{ generatedQrTitle }}</h3>
+                         <!-- SVG 대신 Canvas 사용 -->
+                         <canvas id="qrcode-canvas" class="mx-auto border p-2"></canvas>
+                         <button @click="printQr" class="mt-4 px-6 py-2 bg-gray-800 text-white font-semibold rounded-md hover:bg-gray-700">🖨️ 인쇄하기</button>
                      </div>
                  </div>
             </div>
@@ -217,7 +219,7 @@
     <!-- 제품 스캐너 모달 -->
     <div v-if="showProductScannerModal" class="modal-overlay">
         <div class="modal-content text-center" @click.stop>
-            <h3 class="text-xl font-semibold mb-4 text-gray-800">제품 바코드 스캔</h3>
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">제품 QR 스캔</h3>
             <div id="product-reader" class="mb-4 border-2 border-dashed border-gray-300 rounded-lg p-2"></div>
             <button @click="closeProductScanner" class="w-full mt-4 px-6 py-2 bg-red-500 text-white rounded-md">닫기</button>
         </div>
